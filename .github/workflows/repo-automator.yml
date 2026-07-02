@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: 10up/action-repo-automator@280f5dc0b4ed1b5c50c816e08623bdefce55cdce # v2.1.3
+      - uses: 10up/action-repo-automator@ffe5293adff3ebf042156b2290d63f22bef5d7d4 # v2.2.0
         with:
           fail-label: "Needs Feedback"
           pass-label: "Needs Code Review"
@@ -35,7 +35,14 @@ jobs:
           conflict-comment: "{author} could you please rebase your PR on top of the latest changes from the `develop` branch?"
           reviewers: |
             team:ai-maintainers
-          validate-description: false  # TODO: fix upstream to allow for different PR template types so we can flag for things like missing AI usage and changelog
+          validate-description: false
+          validate-changelog: false
           validate-credits: false
+          alidate-pr-template-sections: |
+            What?
+            Why?
+            Use of AI Tools
+            Testing Instructions
+            Changelog Entry
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
