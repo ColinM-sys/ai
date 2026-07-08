@@ -38,7 +38,7 @@ jobs:
           validate-description: false
           validate-changelog: false
           validate-credits: false
-          alidate-pr-template-sections: |
+          validate-pr-template-sections: |
             What?
             Why?
             Use of AI Tools
