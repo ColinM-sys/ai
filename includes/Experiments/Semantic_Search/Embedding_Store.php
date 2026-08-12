@@ -95,28 +95,29 @@ class Embedding_Store {
 	public function get_unindexed_ids( array $post_types, int $limit = 5 ): array {
 		global $wpdb;
 
+		if ( empty( $post_types ) ) {
+			return array();
+		}
+
 		$types_placeholders = implode( ', ', array_fill( 0, count( $post_types ), '%s' ) );
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$rows = $wpdb->get_col(
-			$wpdb->prepare(
-				// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-				"SELECT p.ID FROM {$wpdb->posts} p
-				LEFT JOIN {$wpdb->postmeta} pm
-					ON p.ID = pm.post_id AND pm.meta_key = %s
-				WHERE p.post_status = 'publish'
-				  AND p.post_type IN ($types_placeholders)
-				  AND pm.meta_value IS NULL
-				LIMIT %d",
-				array_merge(
-					array( self::META_EMBEDDING ),
-					$post_types,
-					array( $limit )
-				)
-			)
+		$sql = "SELECT p.ID FROM {$wpdb->posts} p
+			LEFT JOIN {$wpdb->postmeta} pm
+				ON p.ID = pm.post_id AND pm.meta_key = %s
+			WHERE p.post_status = 'publish'
+			  AND p.post_type IN ( {$types_placeholders} )
+			  AND pm.meta_value IS NULL
+			LIMIT %d";
+
+		$values = array_merge(
+			array( self::META_EMBEDDING ),
+			array_values( $post_types ),
+			array( $limit )
 		);
 
-		return array_map( 'intval', $rows ?: array() );
+		$rows = $wpdb->get_col( $wpdb->prepare( $sql, $values ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- $sql is built from a fixed template with generated placeholders; all values are passed through prepare().
+
+		return array_map( 'intval', is_array( $rows ) ? $rows : array() );
 	}
 
 	/**

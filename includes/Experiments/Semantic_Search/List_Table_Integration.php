@@ -49,7 +49,7 @@ class List_Table_Integration {
 	 */
 	public function register(): void {
 		add_action( 'restrict_manage_posts', array( $this, 'render_checkbox' ) );
-		add_action( 'pre_get_posts',         array( $this, 'maybe_apply_semantic_search' ) );
+		add_action( 'pre_get_posts', array( $this, 'maybe_apply_semantic_search' ) );
 	}
 
 	/**
@@ -127,11 +127,19 @@ class List_Table_Integration {
 			return;
 		}
 
+		$post_types = array_values(
+			array_filter( array_map( 'strval', (array) $query->get( 'post_type' ) ) )
+		);
+
+		if ( empty( $post_types ) ) {
+			$post_types = array( 'post', 'page' );
+		}
+
 		$results = $vector_search->search(
 			$search_term,
 			array(
 				'limit'     => 50,
-				'post_type' => (array) $query->get( 'post_type' ) ?: array( 'post', 'page' ),
+				'post_type' => $post_types,
 			)
 		);
 
@@ -141,8 +149,8 @@ class List_Table_Integration {
 
 		$ids = array_column( $results, 'id' );
 
-		$query->set( 's',        '' );
+		$query->set( 's', '' );
 		$query->set( 'post__in', $ids );
-		$query->set( 'orderby',  'post__in' );
+		$query->set( 'orderby', 'post__in' );
 	}
 }

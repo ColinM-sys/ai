@@ -10,13 +10,10 @@
  *   2. Command palette (Cmd/Ctrl+K in the block editor) — a live REST call
  *      fetches semantically ranked posts and injects them as clickable commands.
  *
- * Blocked upstream on:
- *   - WordPress/php-ai-client#244 (embedding generation API)
- *   - WordPress/ai#683 (native vector index / MariaDB VECTOR INDEX)
- *
- * All embedding HTTP calls are in Embedding_Api (swap for php-ai-client once
- * #244 merges). Storage is in Embedding_Store (swap for VECTOR column once
- * #683 merges). Everything in this class and the UI layer is permanent.
+ * Embedding generation goes through the PHP AI Client via Embedding_Generator,
+ * so provider selection and credentials are owned by the connector settings.
+ * Storage is in Embedding_Store (swap for the VECTOR column once
+ * WordPress/ai#683 merges). Everything in this class and the UI layer is permanent.
  *
  * @package WordPress\AI\Experiments\Semantic_Search
  */
@@ -26,6 +23,7 @@ declare( strict_types=1 );
 namespace WordPress\AI\Experiments\Semantic_Search;
 
 use WordPress\AI\Abstracts\Abstract_Feature;
+use WordPress\AI\Asset_Loader;
 use WordPress\AI\Experiments\Experiment_Category;
 use WordPress\AI\Settings\Settings_Registration;
 
@@ -91,8 +89,8 @@ class Semantic_Search extends Abstract_Feature {
 		( new Index_Page() )->init();
 
 		add_action( 'enqueue_block_editor_assets', array( $this, 'enqueue_command_palette' ) );
-		add_action( 'rest_api_init',               array( $this, 'register_rest_routes' ) );
-		add_action( 'save_post',                   array( $this, 'on_save_post' ), 10, 2 );
+		add_action( 'rest_api_init', array( $this, 'register_rest_routes' ) );
+		add_action( 'save_post', array( $this, 'on_save_post' ), 10, 2 );
 	}
 
 	/**
@@ -143,38 +141,14 @@ class Semantic_Search extends Abstract_Feature {
 	public function get_settings_fields(): array {
 		return array(
 			array(
-				'id'       => 'provider',
-				'label'    => __( 'Provider', 'ai' ),
-				'type'     => 'select',
-				'default'  => 'openai',
-				'elements' => array(
-					array( 'value' => 'openai', 'label' => 'OpenAI' ),
-					array( 'value' => 'jina',   'label' => 'Jina AI' ),
-					array( 'value' => 'ollama', 'label' => 'Ollama (local)' ),
-					array( 'value' => 'google', 'label' => 'Google Gemini' ),
-				),
-			),
-			array(
-				'id'      => 'base_url',
-				'label'   => __( 'Endpoint URL', 'ai' ),
-				'type'    => 'text',
-				'default' => 'https://api.openai.com/v1/embeddings',
-			),
-			array(
 				'id'      => 'model',
 				'label'   => __( 'Model', 'ai' ),
-				'type'    => 'text',
-				'default' => 'text-embedding-3-small',
-			),
-			array(
-				'id'      => 'score_threshold',
-				'label'   => __( 'Score Threshold', 'ai' ),
 				'type'    => 'text',
 				'default' => '',
 			),
 			array(
-				'id'      => 'api_key',
-				'label'   => __( 'API Key', 'ai' ),
+				'id'      => 'score_threshold',
+				'label'   => __( 'Score Threshold', 'ai' ),
 				'type'    => 'text',
 				'default' => '',
 			),
@@ -184,35 +158,25 @@ class Semantic_Search extends Abstract_Feature {
 	/**
 	 * Enqueues the command palette JS in the block editor.
 	 *
-	 * Reads the asset manifest from build-scripts/experiments/semantic-search.asset.php
-	 * for dependency and version data. Falls back to an empty dependency list if
-	 * the manifest is missing. The script is only enqueued when the embedding
-	 * provider is configured, to avoid registering a no-op command loader.
+	 * Delegates to Asset_Loader, which resolves the generated asset manifest and
+	 * reports a clear error if the build output is missing. The script is only
+	 * enqueued when embedding generation is available, to avoid registering a
+	 * no-op command loader.
 	 *
 	 * @since x.x.x
 	 *
 	 * @return void
 	 */
 	public function enqueue_command_palette(): void {
-		$api = new Embedding_Api();
-
-		if ( ! $api->is_configured() ) {
+		if ( ! ( new Embedding_Generator() )->is_available() ) {
 			return;
 		}
 
-		$handle     = 'wpai-semantic-search-command-palette';
-		$asset_file = WPAI_PLUGIN_DIR . 'build-scripts/experiments/semantic-search.asset.php';
-		$asset      = file_exists( $asset_file ) ? require $asset_file : array( 'dependencies' => array(), 'version' => WPAI_VERSION ); // phpcs:ignore WordPressVIPMinimum.Files.IncludingFile.UsingVariable
+		$handle = 'semantic_search';
 
-		wp_enqueue_script(
-			$handle,
-			WPAI_PLUGIN_URL . 'build-scripts/experiments/semantic-search.js',
-			$asset['dependencies'],
-			$asset['version'],
-			array( 'in_footer' => true )
-		);
+		Asset_Loader::enqueue_script( $handle, 'experiments/semantic-search' );
 
-		wp_localize_script(
+		Asset_Loader::localize_script(
 			$handle,
 			'wpaiSemanticSearch',
 			array(
@@ -241,8 +205,8 @@ class Semantic_Search extends Abstract_Feature {
 	 *
 	 * Skips autosaves, revisions, and non-published posts. Runs synchronously
 	 * which is acceptable for single-post saves; bulk indexing goes through
-	 * POST /ai/v1/semantic-search/index in batches of 5. Does nothing when the
-	 * embedding provider is not configured.
+	 * POST /ai/v1/semantic-search/index in batches of 5. Does nothing when
+	 * embedding generation is unavailable.
 	 *
 	 * @since x.x.x
 	 *
@@ -259,9 +223,7 @@ class Semantic_Search extends Abstract_Feature {
 			return;
 		}
 
-		$api = new Embedding_Api();
-
-		if ( ! $api->is_configured() ) {
+		if ( ! ( new Embedding_Generator() )->is_available() ) {
 			return;
 		}
 

@@ -43,7 +43,7 @@ class Index_Page {
 	 * @return void
 	 */
 	public function init(): void {
-		add_action( 'admin_menu',            array( $this, 'add_menu' ) );
+		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 	}
 
@@ -111,23 +111,22 @@ class Index_Page {
 			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'ai' ) );
 		}
 
-		$api   = new Embedding_Api();
-		$store = new Embedding_Store();
-		$stats = $store->get_stats();
+		$generator = new Embedding_Generator();
+		$store     = new Embedding_Store();
+		$stats     = $store->get_stats();
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Semantic Search — Content Index', 'ai' ); ?></h1>
 
-			<?php if ( ! $api->is_configured() ) : ?>
+			<?php if ( ! $generator->is_available() ) : ?>
 				<div class="notice notice-warning">
 					<p>
 						<?php
+						/* translators: %s: URL to the AI settings page. */
+						$notice = __( 'No connector with embedding support is configured. Go to <a href="%s">Settings → AI</a> and connect a provider that supports embedding generation.', 'ai' );
+
 						printf(
-							/* translators: %s: URL to the AI settings page */
-							wp_kses(
-								__( 'No embedding provider configured. Go to <a href="%s">Settings → AI</a> and enable the Semantic Search experiment, then fill in your provider, model, and API key.', 'ai' ),
-								array( 'a' => array( 'href' => array() ) )
-							),
+							wp_kses( $notice, array( 'a' => array( 'href' => array() ) ) ),
 							esc_url( admin_url( 'options-general.php?page=ai-wp-admin' ) )
 						);
 						?>

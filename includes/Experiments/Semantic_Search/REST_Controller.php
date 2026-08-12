@@ -105,7 +105,13 @@ class REST_Controller {
 		$search = new Vector_Search();
 
 		if ( ! $search->is_available() ) {
-			return new \WP_REST_Response( array( 'available' => false, 'results' => array() ), 200 );
+			return new \WP_REST_Response(
+				array(
+					'available' => false,
+					'results'   => array(),
+				),
+				200
+			);
 		}
 
 		$results = $search->search( $query, array( 'limit' => 10 ) );
@@ -173,43 +179,46 @@ class REST_Controller {
 	/**
 	 * Handles GET /ai/v1/semantic-search/index/test.
 	 *
-	 * Generates an embedding for the string "test" using the current provider
-	 * configuration and returns the model name and vector dimensions on success.
-	 * On failure, returns the exact error string. For Google 404 errors caused by
-	 * an incorrect model name, also returns the list of embedding-capable models
-	 * available for the configured API key so the user knows what to type.
+	 * Generates an embedding for the string "test" through the configured
+	 * connector and returns the model preference and vector dimensions on
+	 * success. On failure, returns the error reported by the AI Client.
 	 *
 	 * @since x.x.x
 	 *
 	 * @return \WP_REST_Response Response containing `ok`, and either `model`/`dimensions` or `error`.
 	 */
 	public function handle_test_connection(): \WP_REST_Response {
-		$api       = new Embedding_Api();
-		$embedding = $api->generate( 'test' );
+		$generator = new Embedding_Generator();
 
-		if ( null !== $embedding ) {
+		if ( ! $generator->is_available() ) {
 			return new \WP_REST_Response(
 				array(
-					'ok'         => true,
-					'model'      => $api->get_model(),
-					'dimensions' => count( $embedding ),
+					'ok'    => false,
+					'error' => __( 'No connector with embedding support is configured.', 'ai' ),
 				),
 				200
 			);
 		}
 
-		$payload = array(
-			'ok'    => false,
-			'error' => $api->get_last_error(),
-		);
+		$embedding = $generator->generate( 'test' );
 
-		if ( 'google' === $api->get_provider() ) {
-			$available = $api->list_google_embedding_models();
-			if ( ! empty( $available ) ) {
-				$payload['available_models'] = $available;
-			}
+		if ( null === $embedding ) {
+			return new \WP_REST_Response(
+				array(
+					'ok'    => false,
+					'error' => $generator->get_last_error(),
+				),
+				200
+			);
 		}
 
-		return new \WP_REST_Response( $payload, 200 );
+		return new \WP_REST_Response(
+			array(
+				'ok'         => true,
+				'model'      => $generator->get_model(),
+				'dimensions' => count( $embedding ),
+			),
+			200
+		);
 	}
 }

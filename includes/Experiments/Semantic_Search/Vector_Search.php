@@ -18,9 +18,9 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Runs a semantic search against stored post embeddings.
  *
- * Generates a query embedding via Embedding_Api, then iterates over all
+ * Generates a query embedding via Embedding_Generator, then iterates over all
  * published posts that have a stored embedding, computing cosine similarity
- * against each. Results below the provider's score threshold are excluded.
+ * against each. Results below the configured score threshold are excluded.
  * Surviving results are sorted by score descending and sliced to the limit.
  *
  * @internal
@@ -29,18 +29,18 @@ defined( 'ABSPATH' ) || exit;
 class Vector_Search {
 
 	/**
-	 * Embedding API instance used to generate the query vector.
+	 * Embedding generator instance used to generate the query vector.
 	 *
 	 * @since x.x.x
-	 * @var Embedding_Api
+	 * @var \WordPress\AI\Experiments\Semantic_Search\Embedding_Generator
 	 */
-	private Embedding_Api $api;
+	private Embedding_Generator $api;
 
 	/**
 	 * Embedding store instance used to retrieve stored post vectors.
 	 *
 	 * @since x.x.x
-	 * @var Embedding_Store
+	 * @var \WordPress\AI\Experiments\Semantic_Search\Embedding_Store
 	 */
 	private Embedding_Store $store;
 
@@ -50,23 +50,23 @@ class Vector_Search {
 	 * @since x.x.x
 	 */
 	public function __construct() {
-		$this->api   = new Embedding_Api();
+		$this->api   = new Embedding_Generator();
 		$this->store = new Embedding_Store();
 	}
 
 	/**
-	 * Returns whether the embedding provider is configured and ready to search.
+	 * Returns whether embedding generation is available and ready to search.
 	 *
-	 * Delegates to Embedding_Api::is_configured(). When this returns false,
+	 * Delegates to Embedding_Generator::is_available(). When this returns false,
 	 * callers should fall back to default WordPress search rather than calling
 	 * search() and receiving an empty result.
 	 *
 	 * @since x.x.x
 	 *
-	 * @return bool True when the provider has the minimum required credentials.
+	 * @return bool True when embeddings can be generated.
 	 */
 	public function is_available(): bool {
-		return $this->api->is_configured();
+		return $this->api->is_available();
 	}
 
 	/**
@@ -79,12 +79,12 @@ class Vector_Search {
 	 *
 	 * @since x.x.x
 	 *
-	 * @param string $query Search query string.
-	 * @param array{limit?:int, post_type?:string[]} $args {
-	 *   @type int      $limit     Maximum results to return. Default 10.
-	 *   @type string[] $post_type Post types to search. Default ['post', 'page'].
-	 * }
-	 * @return array<int, array{id:int, title:string, type:string, url:string, excerpt:string, score:float}>
+	 * @param string                                $query Search query string.
+	 * @param array{limit?: int, post_type?: list<string>} $args  Optional. Accepts `limit` (maximum
+	 *                                                     results, default 10) and `post_type`
+	 *                                                     (post types to search, default
+	 *                                                     `['post', 'page']`).
+	 * @return list<array{id: int, title: string, type: string, url: string, excerpt: string, score: float}>
 	 *         Ranked result entries, or an empty array if the query embedding failed.
 	 */
 	public function search( string $query, array $args = array() ): array {
@@ -110,8 +110,11 @@ class Vector_Search {
 
 		$results = array();
 
-		foreach ( $wq->posts as $post_id ) {
-			$embedding = $this->store->get( (int) $post_id );
+		foreach ( $wq->posts as $found_post ) {
+			// WP_Query is queried with 'fields' => 'ids', but the return type also allows objects.
+			$post_id = $found_post instanceof \WP_Post ? $found_post->ID : (int) $found_post;
+
+			$embedding = $this->store->get( $post_id );
 
 			if ( null === $embedding ) {
 				continue;
@@ -125,17 +128,28 @@ class Vector_Search {
 
 			$post = get_post( $post_id );
 
+			if ( ! $post instanceof \WP_Post ) {
+				continue;
+			}
+
+			$edit_link = (string) get_edit_post_link( $post_id, '' );
+
 			$results[] = array(
-				'id'      => (int) $post_id,
+				'id'      => $post_id,
 				'title'   => $post->post_title,
 				'type'    => $post->post_type,
-				'url'     => (string) ( get_edit_post_link( $post_id, '' ) ?: '#' ),
+				'url'     => '' !== $edit_link ? $edit_link : '#',
 				'excerpt' => wp_trim_words( wp_strip_all_tags( $post->post_content ), 20 ),
 				'score'   => round( $score, 4 ),
 			);
 		}
 
-		usort( $results, static fn( $a, $b ) => $b['score'] <=> $a['score'] );
+		usort(
+			$results,
+			static function ( array $a, array $b ): int {
+				return $b['score'] <=> $a['score'];
+			}
+		);
 
 		return array_slice( $results, 0, $limit );
 	}

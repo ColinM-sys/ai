@@ -15,10 +15,10 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Generates and stores embeddings for individual posts and batches.
  *
- * Coordinates between Embedding_Api (which calls the external API) and
+ * Coordinates between Embedding_Generator (which calls the PHP AI Client) and
  * Embedding_Store (which persists the resulting vectors). On the first API
  * error within a batch, indexing stops immediately rather than continuing
- * through a broken key or network connection.
+ * through a broken connector or network connection.
  *
  * @internal
  * @since x.x.x
@@ -26,18 +26,18 @@ defined( 'ABSPATH' ) || exit;
 class Indexer {
 
 	/**
-	 * Embedding API instance used to generate vectors.
+	 * Embedding generator instance used to generate vectors.
 	 *
 	 * @since x.x.x
-	 * @var Embedding_Api
+	 * @var \WordPress\AI\Experiments\Semantic_Search\Embedding_Generator
 	 */
-	private Embedding_Api $api;
+	private Embedding_Generator $api;
 
 	/**
 	 * Embedding store instance used to persist vectors.
 	 *
 	 * @since x.x.x
-	 * @var Embedding_Store
+	 * @var \WordPress\AI\Experiments\Semantic_Search\Embedding_Store
 	 */
 	private Embedding_Store $store;
 
@@ -47,7 +47,7 @@ class Indexer {
 	 * @since x.x.x
 	 */
 	public function __construct() {
-		$this->api   = new Embedding_Api();
+		$this->api   = new Embedding_Generator();
 		$this->store = new Embedding_Store();
 	}
 
@@ -87,8 +87,8 @@ class Indexer {
 	 *
 	 * Iterates over the supplied post IDs and calls index_post() for each.
 	 * If any call fails, the loop breaks immediately and the error string from
-	 * Embedding_Api::get_last_error() is included in the return value so the
-	 * caller can surface it to the user instead of silently continuing.
+	 * Embedding_Generator::get_last_error() is included in the return value so
+	 * the caller can surface it to the user instead of silently continuing.
 	 *
 	 * @since x.x.x
 	 *
@@ -101,13 +101,13 @@ class Indexer {
 		$error   = '';
 
 		foreach ( $ids as $id ) {
-			if ( $this->index_post( $id ) ) {
-				++$success;
-			} else {
+			if ( ! $this->index_post( $id ) ) {
 				++$failed;
 				$error = $this->api->get_last_error();
 				break;
 			}
+
+			++$success;
 		}
 
 		return compact( 'success', 'failed', 'error' );
