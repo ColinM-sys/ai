@@ -14,6 +14,7 @@ namespace WordPress\AI\Abilities\Users;
 use WP_Error;
 use WP_User;
 use WP_User_Query;
+use WordPress\AI\Abilities\Rest\Rest_Backend;
 use stdClass;
 
 // Exit if accessed directly.
@@ -188,6 +189,9 @@ final class Users {
 		$input  = $this->to_input_array( $input );
 		$fields = $this->normalize_fields( $input );
 
+		// Plugin: the alternative implementation reads the same users through the REST API.
+		$rest = Rest_Backend::is_enabled() ? new Users_Rest() : null;
+
 		$lookup_type = $this->get_lookup_type( $input );
 		if ( self::LOOKUP_COLLECTION !== $lookup_type ) {
 			$user = $this->resolve_readable_user( $input, $lookup_type );
@@ -198,22 +202,28 @@ final class Users {
 				);
 			}
 
-			return $this->format_user( $user, $fields );
+			return null !== $rest ? $rest->get_user( $user, $fields ) : $this->format_user( $user, $fields );
 		}
 
 		$per_page = $this->normalize_per_page( $input );
 		$page     = isset( $input['page'] ) ? max( 1, $this->input_int( $input['page'] ) ) : 1;
 
+		// Collections are ordered by display name, ascending, matching the REST users
+		// controller. The output schema documents that order, so it is set here rather than
+		// left to a query default.
 		$query_args = array(
 			'number'      => $per_page,
+			'orderby'     => 'display_name',
+			'order'       => 'ASC',
 			'offset'      => ( $page - 1 ) * $per_page,
 			'count_total' => true,
 		);
 
 		$include = $this->normalize_include( $input );
 		if ( array() !== $include ) {
-			// The include order is not applied as `orderby`. Keeping the default
-			// ordering lets WP_User_Query share cached results with other queries.
+			// The include list selects which users are returned; it does not order them.
+			// This mirrors the REST users controller, which orders by the include list only
+			// when a caller asks for it.
 			$query_args['include'] = $include;
 		}
 
@@ -252,6 +262,11 @@ final class Users {
 			}
 
 			$query_args['has_published_posts'] = $has_published_posts;
+		}
+
+		// Plugin: the alternative implementation runs the same collection through the REST API.
+		if ( null !== $rest ) {
+			return $rest->query_users( $query_args, $fields );
 		}
 
 		$query = new WP_User_Query( $query_args );
@@ -936,7 +951,7 @@ final class Users {
 			'properties'           => array(
 				'users'       => array(
 					'type'        => 'array',
-					'description' => __( 'The readable users matching the collection request.', 'ai' ),
+					'description' => __( 'The readable users matching the collection request, ordered by name, A to Z.', 'ai' ),
 					'items'       => $user_schema,
 				),
 				'total'       => array(
