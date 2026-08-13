@@ -14,6 +14,8 @@ use WordPress\AI\Features\Feature_Category;
 use WordPress\AI\Features\Registry;
 use WordPress\AI\Settings\Settings_Page;
 
+require_once __DIR__ . '/settings-page-stubs.php';
+
 /**
  * Stub feature for testing with a known category.
  */
@@ -578,6 +580,32 @@ class Settings_PageTest extends WP_UnitTestCase {
 			$data['capabilities'],
 			'Capabilities must be a sequential list so it serializes as a JSON array.'
 		);
+	}
+
+	/**
+	 * Test that init registers the script module data filter for the settings page.
+	 *
+	 * Covers the wiring rather than the payload: that the filter is attached under the
+	 * page slug the route script module actually reads, and that applying it returns the
+	 * capability status the settings notice depends on.
+	 */
+	public function test_init_registers_script_module_data_filter() {
+		Settings_Page::init( $this->registry );
+
+		$this->assertNotFalse(
+			has_filter( 'script_module_data_ai-wp-admin' ),
+			'The settings page must expose its data under the route script module hook.'
+		);
+
+		$data = apply_filters( 'script_module_data_ai-wp-admin', array( 'existing' => 'kept' ) );
+
+		$this->assertIsArray( $data );
+		$this->assertSame( 'kept', $data['existing'], 'Existing script module data must be preserved.' );
+		$this->assertArrayHasKey( 'hasCredentials', $data );
+		$this->assertArrayHasKey( 'hasValidCredentials', $data );
+		$this->assertArrayHasKey( 'capabilities', $data );
+		$this->assertArrayHasKey( 'connectorsUrl', $data );
+		$this->assertIsArray( $data['capabilities'] );
 	}
 
 	/**
