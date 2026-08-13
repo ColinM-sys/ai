@@ -1706,6 +1706,89 @@ class HelpersTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Test that get_supported_capabilities() reports a text connector's capability.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_get_supported_capabilities_reports_text_generation(): void {
+		if ( ! class_exists( AiClient::class ) ) {
+			$this->markTestSkipped( 'AiClient not available.' );
+		}
+
+		$this->register_capability_connector( array( CapabilityEnum::TEXT_GENERATION ) );
+
+		$this->assertContains(
+			CapabilityEnum::TEXT_GENERATION,
+			\WordPress\AI\get_supported_capabilities( true )
+		);
+	}
+
+	/**
+	 * Test that get_supported_capabilities() reports speech without claiming text.
+	 *
+	 * This is the data the settings screen uses to tell a speech-only site what its
+	 * connectors do provide.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_get_supported_capabilities_reports_speech_without_text(): void {
+		if ( ! class_exists( AiClient::class ) ) {
+			$this->markTestSkipped( 'AiClient not available.' );
+		}
+
+		$this->register_capability_connector(
+			array(
+				CapabilityEnum::TEXT_TO_SPEECH_CONVERSION,
+				CapabilityEnum::SPEECH_GENERATION,
+			)
+		);
+
+		$capabilities = \WordPress\AI\get_supported_capabilities( true );
+
+		$this->assertContains( CapabilityEnum::TEXT_TO_SPEECH_CONVERSION, $capabilities );
+		$this->assertContains( CapabilityEnum::SPEECH_GENERATION, $capabilities );
+		$this->assertNotContains( CapabilityEnum::TEXT_GENERATION, $capabilities );
+	}
+
+	/**
+	 * Test that get_supported_capabilities() returns an empty array without connectors.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_get_supported_capabilities_is_empty_without_connectors(): void {
+		$this->assertSame( array(), \WordPress\AI\get_supported_capabilities( true ) );
+	}
+
+	/**
+	 * Test that get_supported_capabilities() returns a JSON-serializable list.
+	 *
+	 * The value is localized to the settings page script module, so it must encode as a
+	 * JSON array rather than an object with preserved integer keys.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_get_supported_capabilities_returns_a_sequential_list(): void {
+		if ( ! class_exists( AiClient::class ) ) {
+			$this->markTestSkipped( 'AiClient not available.' );
+		}
+
+		$this->register_capability_connector( array( CapabilityEnum::SPEECH_GENERATION ) );
+
+		$capabilities = \WordPress\AI\get_supported_capabilities( true );
+
+		$this->assertSame(
+			array_values( $capabilities ),
+			$capabilities,
+			'The capability list must be sequentially keyed.'
+		);
+		$this->assertStringStartsWith(
+			'[',
+			(string) wp_json_encode( $capabilities ),
+			'The capability list must encode as a JSON array.'
+		);
+	}
+
+	/**
 	 * Test that has_valid_ai_credentials() is true for a text-capable connector.
 	 *
 	 * @since x.x.x

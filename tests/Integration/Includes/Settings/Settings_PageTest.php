@@ -279,6 +279,19 @@ class Settings_PageTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Invokes the private script module data builder.
+	 *
+	 * @param array<string, mixed> $data     The existing script module data.
+	 * @param Registry             $registry The feature registry.
+	 * @return array<string, mixed> The script module data.
+	 */
+	private function get_script_module_data( array $data, Registry $registry ): array {
+		$method = new \ReflectionMethod( Settings_Page::class, 'get_script_module_data' );
+		$method->setAccessible( true );
+		return $method->invoke( null, $data, $registry );
+	}
+
+	/**
 	 * Test that an empty registry returns empty groups and features.
 	 */
 	public function test_empty_registry_returns_empty_metadata() {
@@ -541,6 +554,29 @@ class Settings_PageTest extends WP_UnitTestCase {
 		);
 		$this->assertTrue(
 			has_action( 'admin_page_access_denied', array( Settings_Page::class, 'maybe_redirect_legacy_page' ) ) !== false
+		);
+	}
+
+	/**
+	 * Test that the settings page script module data exposes connector capability status.
+	 *
+	 * The settings screen needs all three signals to explain a capability mismatch:
+	 * whether credentials exist at all, whether they can generate text, and which
+	 * capabilities the connectors actually provide.
+	 */
+	public function test_script_module_data_includes_capability_status() {
+		$data = $this->get_script_module_data( array(), $this->registry );
+
+		$this->assertArrayHasKey( 'hasCredentials', $data );
+		$this->assertArrayHasKey( 'hasValidCredentials', $data );
+		$this->assertArrayHasKey( 'capabilities', $data );
+		$this->assertArrayHasKey( 'connectorsUrl', $data );
+
+		$this->assertIsArray( $data['capabilities'] );
+		$this->assertSame(
+			array_values( $data['capabilities'] ),
+			$data['capabilities'],
+			'Capabilities must be a sequential list so it serializes as a JSON array.'
 		);
 	}
 

@@ -586,6 +586,35 @@ function has_capability_support( string $capability, bool $reset_cache = false )
 }
 
 /**
+ * Returns the capabilities the configured connectors can actually provide.
+ *
+ * Lets callers explain what a site's connectors do offer, rather than only reporting
+ * which capability is missing.
+ *
+ * @since x.x.x
+ *
+ * @param bool $reset_cache Whether to bypass the static cache and recompute. Default false.
+ * @return list<string> The supported capability values, as `CapabilityEnum` constant values.
+ */
+function get_supported_capabilities( bool $reset_cache = false ): array {
+	if ( ! class_exists( CapabilityEnum::class ) ) {
+		return array();
+	}
+
+	$supported = array();
+
+	foreach ( CapabilityEnum::getValues() as $capability ) {
+		if ( ! has_capability_support( $capability, $reset_cache ) ) {
+			continue;
+		}
+
+		$supported[] = $capability;
+	}
+
+	return $supported;
+}
+
+/**
  * Checks whether any configured connector exposes an image-generation-capable model.
  *
  * @since 1.0.2
