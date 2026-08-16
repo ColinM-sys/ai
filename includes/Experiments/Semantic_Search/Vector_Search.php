@@ -98,22 +98,25 @@ class Vector_Search {
 		$post_types      = $args['post_type'] ?? array( 'post', 'page' );
 		$score_threshold = $this->api->get_score_threshold();
 
-		$wq = new \WP_Query(
-			array(
-				'post_type'      => $post_types,
-				'post_status'    => 'publish',
-				'posts_per_page' => -1,
-				'no_found_rows'  => true,
-				'fields'         => 'ids',
-			)
-		);
+		/**
+		 * Filters the maximum number of indexed posts scored per semantic search.
+		 *
+		 * The vector search compares the query embedding against each candidate
+		 * in memory, so this bounds the work (and memory) on large sites. Only
+		 * posts that already have a stored embedding are considered.
+		 *
+		 * @since x.x.x
+		 *
+		 * @param int      $max_candidates Maximum posts to score. Default 2000.
+		 * @param string[] $post_types     Post types being searched.
+		 */
+		$max_candidates = (int) apply_filters( 'wpai_semantic_search_max_candidates', 2000, $post_types );
+
+		$candidate_ids = $this->store->get_indexed_ids( $post_types, $max_candidates );
 
 		$results = array();
 
-		foreach ( $wq->posts as $found_post ) {
-			// WP_Query is queried with 'fields' => 'ids', but the return type also allows objects.
-			$post_id = $found_post instanceof \WP_Post ? $found_post->ID : (int) $found_post;
-
+		foreach ( $candidate_ids as $post_id ) {
 			$embedding = $this->store->get( $post_id );
 
 			if ( null === $embedding ) {

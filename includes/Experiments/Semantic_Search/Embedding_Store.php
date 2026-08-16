@@ -121,6 +121,46 @@ class Embedding_Store {
 	}
 
 	/**
+	 * Returns IDs of published posts that already have a stored embedding.
+	 *
+	 * Lets the vector search score only indexed content instead of loading
+	 * every published post into memory.
+	 *
+	 * @since x.x.x
+	 *
+	 * @param string[] $post_types Post type slugs to include (e.g. ['post', 'page']).
+	 * @param int      $limit      Maximum number of IDs to return.
+	 * @return int[] Post IDs that have a stored embedding, newest first.
+	 */
+	public function get_indexed_ids( array $post_types, int $limit ): array {
+		global $wpdb;
+
+		if ( empty( $post_types ) || $limit <= 0 ) {
+			return array();
+		}
+
+		$types_placeholders = implode( ', ', array_fill( 0, count( $post_types ), '%s' ) );
+
+		$sql = "SELECT DISTINCT p.ID FROM {$wpdb->posts} p
+			INNER JOIN {$wpdb->postmeta} pm
+				ON p.ID = pm.post_id AND pm.meta_key = %s
+			WHERE p.post_status = 'publish'
+			  AND p.post_type IN ( {$types_placeholders} )
+			ORDER BY p.ID DESC
+			LIMIT %d";
+
+		$values = array_merge(
+			array( self::META_EMBEDDING ),
+			array_values( $post_types ),
+			array( $limit )
+		);
+
+		$rows = $wpdb->get_col( $wpdb->prepare( $sql, $values ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.NotPrepared -- $sql is built from a fixed template with generated placeholders; all values are passed through prepare().
+
+		return array_map( 'intval', is_array( $rows ) ? $rows : array() );
+	}
+
+	/**
 	 * Returns total and indexed post/page counts for the current site.
 	 *
 	 * @since x.x.x

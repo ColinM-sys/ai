@@ -218,6 +218,43 @@ class Semantic_SearchTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Test that indexed ID lookups return only posts that have a stored embedding.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_get_indexed_ids_returns_only_indexed_posts() {
+		$store   = new Embedding_Store();
+		$indexed = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		$other   = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+
+		$store->save( $indexed, array( 0.1, 0.2, 0.3 ), 'test-model' );
+
+		$ids = $store->get_indexed_ids( array( 'post', 'page' ), 50 );
+
+		$this->assertContains( $indexed, $ids, 'A post with an embedding should be returned.' );
+		$this->assertNotContains( $other, $ids, 'A post without an embedding should be excluded.' );
+		$this->assertContainsOnly( 'int', $ids );
+	}
+
+	/**
+	 * Test that indexed ID lookups honour the requested limit.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_get_indexed_ids_respects_limit() {
+		$store = new Embedding_Store();
+
+		foreach ( self::factory()->post->create_many( 3, array( 'post_status' => 'publish' ) ) as $post_id ) {
+			$store->save( $post_id, array( 0.1, 0.2 ), 'test-model' );
+		}
+
+		$ids = $store->get_indexed_ids( array( 'post', 'page' ), 2 );
+
+		$this->assertCount( 2, $ids );
+		$this->assertContainsOnly( 'int', $ids );
+	}
+
+	/**
 	 * Test that cosine similarity scores identical and orthogonal vectors correctly.
 	 *
 	 * @since x.x.x
