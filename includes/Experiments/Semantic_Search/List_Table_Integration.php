@@ -69,18 +69,49 @@ class List_Table_Integration {
 		}
 
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$checked = isset( $_GET[ self::PARAM ] ) ? ' checked' : '';
+		$checked = isset( $_GET[ self::PARAM ] );
 		?>
 		<label style="margin-left:6px; line-height:28px;">
-			<input
-				type="checkbox"
-				name="<?php echo esc_attr( self::PARAM ); ?>"
-				value="1"
-				<?php echo esc_attr( $checked ); ?>
-				onchange="this.form.submit()"
-			/>
+			<input type="checkbox" id="wpai-semantic-toggle" value="1"<?php echo $checked ? ' checked' : ''; ?> />
 			<?php esc_html_e( 'Search semantically', 'ai' ); ?>
 		</label>
+		<script>
+		( function () {
+			var toggle = document.getElementById( 'wpai-semantic-toggle' );
+			if ( ! toggle ) {
+				return;
+			}
+			var param = <?php echo wp_json_encode( self::PARAM ); ?>;
+			// The checkbox and the search field can live in separate admin forms,
+			// so bind the flag to whichever form owns the search input and keep it
+			// in sync with the checkbox — this guarantees `s` and the flag submit together.
+			var searchInput = document.querySelector( 'input[name="s"]' );
+			var form = searchInput ? searchInput.form : toggle.form;
+			if ( ! form ) {
+				return;
+			}
+			function sync() {
+				var hidden = form.querySelector( 'input[type="hidden"][name="' + param + '"]' );
+				if ( toggle.checked ) {
+					if ( ! hidden ) {
+						hidden = document.createElement( 'input' );
+						hidden.type  = 'hidden';
+						hidden.name  = param;
+						hidden.value = '1';
+						form.appendChild( hidden );
+					}
+				} else if ( hidden ) {
+					hidden.parentNode.removeChild( hidden );
+				}
+			}
+			toggle.addEventListener( 'change', function () {
+				sync();
+				form.submit();
+			} );
+			form.addEventListener( 'submit', sync );
+			sync();
+		} )();
+		</script>
 		<?php
 	}
 
