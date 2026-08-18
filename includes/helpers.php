@@ -735,6 +735,28 @@ function get_default_request_timeout( string $feature_id, int $default_timeout =
 }
 
 /**
+ * Returns the maximum number of items a single bulk action may process.
+ *
+ * @since x.x.x
+ *
+ * @param string $feature_id The feature identifier (e.g. 'summarization').
+ * @return int The maximum number of items to process, always at least 1.
+ */
+function get_bulk_action_max_items( string $feature_id ): int {
+	/**
+	 * Filters the maximum number of items a single bulk action may process.
+	 *
+	 * @since x.x.x
+	 *
+	 * @param int    $max_items  The maximum number of items per bulk run.
+	 * @param string $feature_id The ID of the feature.
+	 */
+	$max_items = (int) apply_filters( 'wpai_bulk_action_max_items', 100, $feature_id );
+
+	return max( 1, $max_items );
+}
+
+/**
  * Determines whether a post type supports bulk AI actions for a given feature.
  *
  * @since 1.2.0
