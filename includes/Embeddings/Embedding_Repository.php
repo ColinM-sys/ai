@@ -111,11 +111,13 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 
 		if ( false === $result ) {
 			throw new RuntimeException(
-				sprintf(
-					'Failed to store embedding for %s %d: %s',
-					$record->get_object_type(),
-					$record->get_object_id(),
-					(string) $wpdb->last_error
+				esc_html(
+					sprintf(
+						'Failed to store embedding for %s %d: %s',
+						$record->get_object_type(),
+						$record->get_object_id(),
+						(string) $wpdb->last_error
+					)
 				)
 			);
 		}

@@ -65,11 +65,13 @@ final class Vector_Codec {
 	public static function unpack( string $packed, int $dimensions ): array {
 		if ( $dimensions <= 0 || strlen( $packed ) !== $dimensions * self::BYTES_PER_COMPONENT ) {
 			throw new InvalidArgumentException(
-				sprintf(
-					'Packed vector is %d bytes, expected %d for %d dimensions.',
-					strlen( $packed ),
-					$dimensions * self::BYTES_PER_COMPONENT,
-					$dimensions
+				esc_html(
+					sprintf(
+						'Packed vector is %d bytes, expected %d for %d dimensions.',
+						strlen( $packed ),
+						$dimensions * self::BYTES_PER_COMPONENT,
+						$dimensions
+					)
 				)
 			);
 		}
@@ -117,13 +119,13 @@ final class Vector_Codec {
 		foreach ( $vector as $index => $value ) {
 			if ( ! is_int( $value ) && ! is_float( $value ) ) {
 				throw new InvalidArgumentException(
-					sprintf( 'Embedding vector component %d is not a number.', $index )
+					esc_html( sprintf( 'Embedding vector component %d is not a number.', $index ) )
 				);
 			}
 
 			if ( is_float( $value ) && ! is_finite( $value ) ) {
 				throw new InvalidArgumentException(
-					sprintf( 'Embedding vector component %d is not finite.', $index )
+					esc_html( sprintf( 'Embedding vector component %d is not finite.', $index ) )
 				);
 			}
 		}
