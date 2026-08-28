@@ -21,7 +21,7 @@ defined( 'ABSPATH' ) || exit;
  * The encoding is the same one used by MariaDB's `VECTOR` type, which keeps a future
  * native backend able to read the same bytes.
  *
- * @since n.e.x.t
+ * @since 1.4.0
  */
 final class Vector_Codec {
 
@@ -33,7 +33,7 @@ final class Vector_Codec {
 	/**
 	 * Packs a vector into a little-endian float32 byte string.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @param list<int|float> $vector The vector to pack.
 	 * @return string Packed bytes, `4 * count( $vector )` long.
@@ -54,7 +54,7 @@ final class Vector_Codec {
 	/**
 	 * Unpacks a little-endian float32 byte string into a vector.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @param string $packed     Packed bytes as produced by {@see self::pack()}.
 	 * @param int    $dimensions Expected number of components.
@@ -87,7 +87,7 @@ final class Vector_Codec {
 	/**
 	 * Calculates the Euclidean (L2) norm of a vector.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @param list<int|float> $vector The vector.
 	 * @return float The norm.
@@ -104,7 +104,7 @@ final class Vector_Codec {
 	/**
 	 * Validates that a value is a non-empty list of finite numbers.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @param mixed $vector The candidate vector.
 	 * @return void

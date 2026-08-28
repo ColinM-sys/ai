@@ -20,7 +20,7 @@ defined( 'ABSPATH' ) || exit;
  * model are part of every record's identity rather than a detail of the configuration that
  * happened to be active when it was generated.
  *
- * @since n.e.x.t
+ * @since 1.4.0
  */
 final class Embedding_Record {
 
@@ -83,7 +83,7 @@ final class Embedding_Record {
 	/**
 	 * Constructor.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @param string          $object_type  Type of the embedded object, e.g. `post`.
 	 * @param int             $object_id    ID of the embedded object.
@@ -149,7 +149,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the row ID, or 0 when the record has not been persisted.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @return int Row ID.
 	 */
@@ -160,7 +160,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the type of the embedded object.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @return string Object type.
 	 */
@@ -171,7 +171,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the ID of the embedded object.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @return int Object ID.
 	 */
@@ -182,7 +182,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the position of this vector among the object's chunks.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @return int Chunk index.
 	 */
@@ -193,7 +193,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the provider ID of the model that produced the vector.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @return string Provider ID.
 	 */
@@ -204,7 +204,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the model ID that produced the vector.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @return string Model ID.
 	 */
@@ -215,7 +215,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the vector.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @return list<float> The vector.
 	 */
@@ -226,7 +226,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the number of components in the vector.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @return int Dimensions.
 	 */
@@ -237,7 +237,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the hash of the source content, or an empty string.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @return string Content hash.
 	 */
@@ -248,7 +248,7 @@ final class Embedding_Record {
 	/**
 	 * Returns whether this record was produced by the given model.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @param string $provider Provider ID.
 	 * @param string $model    Model ID.
@@ -261,7 +261,7 @@ final class Embedding_Record {
 	/**
 	 * Returns a copy of this record carrying the given row ID.
 	 *
-	 * @since n.e.x.t
+	 * @since 1.4.0
 	 *
 	 * @param int $id Row ID.
 	 * @return self The copy.
