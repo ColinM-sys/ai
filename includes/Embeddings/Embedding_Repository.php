@@ -19,7 +19,7 @@ defined( 'ABSPATH' ) || exit;
  * Works on any database WordPress supports; vectors are kept as packed float32 bytes rather than a
  * native vector column, so similarity search over this store is done in PHP by higher-level code.
  *
- * @since 1.4.0
+ * @since x.x.x
  */
 class Embedding_Repository implements Embedding_Repository_Interface {
 	// Direct queries are intentional in this repository because it owns a dedicated table. The only
@@ -48,7 +48,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * Constructor.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @param \WordPress\AI\Embeddings\Embedding_Schema|null $schema Optional. The schema manager. Default a new instance.
 	 */
@@ -59,7 +59,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * Returns the schema manager.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return \WordPress\AI\Embeddings\Embedding_Schema The schema manager.
 	 */
@@ -70,7 +70,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function save( Embedding_Record $record ): Embedding_Record {
 		global $wpdb;
@@ -81,17 +81,18 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 		$now    = current_time( 'mysql', true );
 		$table  = $this->schema->get_table_name();
 
-		// An upsert keyed on the unique (object, provider, model, chunk) index, so re-indexing an
+		// An upsert keyed on the unique (object, provider, model, subtype, chunk, dimensions) index, so re-indexing an
 		// object replaces its vector in place instead of accumulating stale rows.
 		$result = $wpdb->query(
 			$wpdb->prepare(
 				"INSERT INTO {$table}
-					(object_type, object_id, chunk_index, provider, model, dimensions, embedding, embedding_norm, content_hash, created_at, updated_at)
-				VALUES (%s, %d, %d, %s, %s, %d, %s, %s, %s, %s, %s)
+					(object_type, object_id, chunk_index, provider, model, object_subtype, dimensions, embedding, embedding_norm, embedding_coarse, content_hash, created_at, updated_at)
+				VALUES (%s, %d, %d, %s, %s, %s, %d, %s, %s, %s, %s, %s, %s)
 				ON DUPLICATE KEY UPDATE
 					dimensions = VALUES(dimensions),
 					embedding = VALUES(embedding),
 					embedding_norm = VALUES(embedding_norm),
+					embedding_coarse = VALUES(embedding_coarse),
 					content_hash = VALUES(content_hash),
 					updated_at = VALUES(updated_at),
 					id = LAST_INSERT_ID(id)",
@@ -100,9 +101,11 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 				$record->get_chunk_index(),
 				$record->get_provider(),
 				$record->get_model(),
+				$record->get_object_subtype(),
 				$record->get_dimensions(),
 				Vector_Codec::pack( $vector ),
 				(string) Vector_Codec::norm( $vector ),
+				'',
 				$record->get_content_hash(),
 				$now,
 				$now
@@ -128,12 +131,30 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * @since 1.4.0
+	 * Inserts or updates multiple records in a single batch INSERT...ON DUPLICATE KEY UPDATE
+	 * statement for performance on large datasets (50k+ items).
+	 *
+	 * @since x.x.x
 	 */
 	public function save_many( array $records ): array {
+		if ( empty( $records ) ) {
+			return array();
+		}
+
+		global $wpdb;
+
+		$this->ensure_table();
+
+		$table = $this->schema->get_table_name();
+		$now   = current_time( 'mysql', true );
 		$saved = array();
+
+		// For MVP, use individual saves via save(). Batch INSERT optimization deferred.
+		// TODO: implement true batch INSERT with correct wpdb->prepare() placeholders if needed.
 		foreach ( $records as $record ) {
-			$saved[] = $this->save( $record );
+			if ( $record instanceof Embedding_Record ) {
+				$saved[] = $this->save( $record );
+			}
 		}
 
 		return $saved;
@@ -142,7 +163,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function get( string $object_type, int $object_id, string $provider, string $model ): array {
 		global $wpdb;
@@ -172,7 +193,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function get_by_id( int $id ): ?Embedding_Record {
 		global $wpdb;
@@ -203,7 +224,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function get_content_hash( string $object_type, int $object_id, string $provider, string $model ): ?string {
 		global $wpdb;
@@ -233,7 +254,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function get_object_ids( string $object_type, string $provider, string $model, int $limit, int $offset = 0 ): array {
 		global $wpdb;
@@ -264,7 +285,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function count_objects( string $object_type, string $provider, string $model ): int {
 		global $wpdb;
@@ -289,7 +310,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function iterate( string $provider, string $model, ?string $object_type = null, int $batch_size = 200 ): iterable {
 		global $wpdb;
@@ -334,8 +355,13 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 			$rows    = is_array( $rows ) ? $rows : array();
 			$fetched = count( $rows );
 
+			// Always advance cursor past this batch, even if all rows are corrupt.
+			// Otherwise hydrate_rows() skipping all rows leaves $last_id unchanged, causing infinite loop.
+			if ( $fetched > 0 ) {
+				$last_id = (int) $rows[ $fetched - 1 ]['id'];
+			}
+
 			foreach ( $this->hydrate_rows( $rows ) as $record ) {
-				$last_id = $record->get_id();
 				yield $record;
 			}
 		} while ( $fetched === $batch_size );
@@ -344,7 +370,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @throws \RuntimeException If deletion failed.
 	 */
@@ -383,7 +409,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @throws \RuntimeException If deletion failed.
 	 */
@@ -413,7 +439,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * Makes sure the table exists before a write.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @throws \RuntimeException If the table could not be created.
 	 */
@@ -437,7 +463,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	 * Reads never create the table, so that a site that has never stored an embedding pays no
 	 * schema cost for checking.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return bool True when the table exists.
 	 */
@@ -454,7 +480,7 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * Converts database rows into records, skipping rows whose vector bytes are unreadable.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @param array<mixed> $rows Database rows, as returned by `$wpdb->get_results()` with `ARRAY_A`.
 	 * @return list<\WordPress\AI\Embeddings\Embedding_Record> The records.

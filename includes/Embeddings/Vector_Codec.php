@@ -21,7 +21,7 @@ defined( 'ABSPATH' ) || exit;
  * The encoding is the same one used by MariaDB's `VECTOR` type, which keeps a future
  * native backend able to read the same bytes.
  *
- * @since 1.4.0
+ * @since x.x.x
  */
 final class Vector_Codec {
 
@@ -33,7 +33,7 @@ final class Vector_Codec {
 	/**
 	 * Packs a vector into a little-endian float32 byte string.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @param list<int|float> $vector The vector to pack.
 	 * @return string Packed bytes, `4 * count( $vector )` long.
@@ -54,7 +54,7 @@ final class Vector_Codec {
 	/**
 	 * Unpacks a little-endian float32 byte string into a vector.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @param string $packed     Packed bytes as produced by {@see self::pack()}.
 	 * @param int    $dimensions Expected number of components.
@@ -87,7 +87,7 @@ final class Vector_Codec {
 	/**
 	 * Calculates the Euclidean (L2) norm of a vector.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @param list<int|float> $vector The vector.
 	 * @return float The norm.
@@ -102,9 +102,27 @@ final class Vector_Codec {
 	}
 
 	/**
+	 * Packs a vector into little-endian float32 bytes for coarse (quantized) similarity filtering.
+	 *
+	 * For MVP, this packs at full float32 precision. Applications can provide pre-quantized vectors
+	 * for coarse filtering, or this can be optimized to actual quantization (float16, int8) later.
+	 *
+	 * @since x.x.x
+	 *
+	 * @param list<int|float> $vector The coarse vector to pack.
+	 * @return string Packed bytes, `4 * count( $vector )` long.
+	 *
+	 * @throws \InvalidArgumentException If the vector is empty or contains non-finite values.
+	 */
+	public static function pack_coarse( array $vector ): string {
+		// For now, pack_coarse() uses same format as pack(). Future: quantize to float16 or int8.
+		return self::pack( $vector );
+	}
+
+	/**
 	 * Validates that a value is a non-empty list of finite numbers.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @param mixed $vector The candidate vector.
 	 * @return void

@@ -20,7 +20,7 @@ defined( 'ABSPATH' ) || exit;
  * model are part of every record's identity rather than a detail of the configuration that
  * happened to be active when it was generated.
  *
- * @since 1.4.0
+ * @since x.x.x
  */
 final class Embedding_Record {
 
@@ -37,6 +37,13 @@ final class Embedding_Record {
 	 * @var string
 	 */
 	private string $object_type;
+
+	/**
+	 * Subtype of the embedded object, e.g. `page` (for object_type `post`), or empty.
+	 *
+	 * @var string
+	 */
+	private string $object_subtype;
 
 	/**
 	 * ID of the embedded object.
@@ -83,16 +90,17 @@ final class Embedding_Record {
 	/**
 	 * Constructor.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
-	 * @param string          $object_type  Type of the embedded object, e.g. `post`.
-	 * @param int             $object_id    ID of the embedded object.
-	 * @param string          $provider     Provider ID of the model that produced the vector.
-	 * @param string          $model        Model ID that produced the vector.
-	 * @param list<int|float> $vector       The vector.
-	 * @param int             $chunk_index  Optional. Position among the object's chunks. Default 0.
-	 * @param string          $content_hash Optional. Hash of the source content. Default empty.
-	 * @param int             $id           Optional. Row ID when hydrated from storage. Default 0.
+	 * @param string          $object_type    Type of the embedded object, e.g. `post`.
+	 * @param int             $object_id      ID of the embedded object.
+	 * @param string          $provider       Provider ID of the model that produced the vector.
+	 * @param string          $model          Model ID that produced the vector.
+	 * @param list<int|float> $vector         The vector.
+	 * @param int             $chunk_index    Optional. Position among the object's chunks. Default 0.
+	 * @param string          $content_hash   Optional. Hash of the source content. Default empty.
+	 * @param int             $id             Optional. Row ID when hydrated from storage. Default 0.
+	 * @param string          $object_subtype Optional. Subtype of the object, e.g. `page`. Default empty.
 	 *
 	 * @throws \InvalidArgumentException If any identity field or the vector is invalid.
 	 */
@@ -104,14 +112,20 @@ final class Embedding_Record {
 		array $vector,
 		int $chunk_index = 0,
 		string $content_hash = '',
-		int $id = 0
+		int $id = 0,
+		string $object_subtype = ''
 	) {
-		$object_type = trim( $object_type );
-		$provider    = trim( $provider );
-		$model       = trim( $model );
+		$object_type    = trim( $object_type );
+		$object_subtype = trim( $object_subtype );
+		$provider       = trim( $provider );
+		$model          = trim( $model );
 
 		if ( '' === $object_type || strlen( $object_type ) > 32 ) {
 			throw new InvalidArgumentException( 'Object type must be a non-empty string of at most 32 characters.' );
+		}
+
+		if ( '' !== $object_subtype && strlen( $object_subtype ) > 32 ) {
+			throw new InvalidArgumentException( 'Object subtype must be at most 32 characters.' );
 		}
 
 		if ( $object_id <= 0 ) {
@@ -136,20 +150,21 @@ final class Embedding_Record {
 
 		Vector_Codec::validate( $vector );
 
-		$this->id           = max( 0, $id );
-		$this->object_type  = $object_type;
-		$this->object_id    = $object_id;
-		$this->chunk_index  = $chunk_index;
-		$this->provider     = $provider;
-		$this->model        = $model;
-		$this->vector       = array_map( 'floatval', $vector );
-		$this->content_hash = $content_hash;
+		$this->id             = max( 0, $id );
+		$this->object_type    = $object_type;
+		$this->object_subtype = $object_subtype;
+		$this->object_id      = $object_id;
+		$this->chunk_index    = $chunk_index;
+		$this->provider       = $provider;
+		$this->model          = $model;
+		$this->vector         = array_map( 'floatval', $vector );
+		$this->content_hash   = $content_hash;
 	}
 
 	/**
 	 * Returns the row ID, or 0 when the record has not been persisted.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return int Row ID.
 	 */
@@ -160,7 +175,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the type of the embedded object.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return string Object type.
 	 */
@@ -169,9 +184,20 @@ final class Embedding_Record {
 	}
 
 	/**
+	 * Returns the subtype of the embedded object, or an empty string.
+	 *
+	 * @since x.x.x
+	 *
+	 * @return string Object subtype.
+	 */
+	public function get_object_subtype(): string {
+		return $this->object_subtype;
+	}
+
+	/**
 	 * Returns the ID of the embedded object.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return int Object ID.
 	 */
@@ -182,7 +208,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the position of this vector among the object's chunks.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return int Chunk index.
 	 */
@@ -193,7 +219,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the provider ID of the model that produced the vector.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return string Provider ID.
 	 */
@@ -204,7 +230,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the model ID that produced the vector.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return string Model ID.
 	 */
@@ -215,7 +241,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the vector.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return list<float> The vector.
 	 */
@@ -226,7 +252,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the number of components in the vector.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return int Dimensions.
 	 */
@@ -237,7 +263,7 @@ final class Embedding_Record {
 	/**
 	 * Returns the hash of the source content, or an empty string.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return string Content hash.
 	 */
@@ -248,7 +274,7 @@ final class Embedding_Record {
 	/**
 	 * Returns whether this record was produced by the given model.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @param string $provider Provider ID.
 	 * @param string $model    Model ID.
@@ -261,7 +287,7 @@ final class Embedding_Record {
 	/**
 	 * Returns a copy of this record carrying the given row ID.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @param int $id Row ID.
 	 * @return self The copy.

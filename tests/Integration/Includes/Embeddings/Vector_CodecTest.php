@@ -14,7 +14,7 @@ use WordPress\AI\Embeddings\Vector_Codec;
 /**
  * Vector_Codec test case.
  *
- * @since 1.4.0
+ * @since x.x.x
  *
  * @covers \WordPress\AI\Embeddings\Vector_Codec
  */
@@ -23,7 +23,7 @@ class Vector_CodecTest extends WP_UnitTestCase {
 	/**
 	 * Tests that packing produces four bytes per component.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function test_pack_uses_four_bytes_per_component(): void {
 		$packed = Vector_Codec::pack( array( 0.1, -0.2, 0.3 ) );
@@ -34,7 +34,7 @@ class Vector_CodecTest extends WP_UnitTestCase {
 	/**
 	 * Tests that packing is little-endian float32, the layout MariaDB's VECTOR type uses.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function test_pack_is_little_endian_float32(): void {
 		$this->assertSame( "\x00\x00\x80\x3f", Vector_Codec::pack( array( 1.0 ) ) );
@@ -44,7 +44,7 @@ class Vector_CodecTest extends WP_UnitTestCase {
 	/**
 	 * Tests that a vector survives a round trip within float32 precision.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function test_round_trip_preserves_values_within_float32_precision(): void {
 		$vector = array( 0.123456789, -0.987654321, 42.0, 1.0e-5, 0 );
@@ -61,7 +61,7 @@ class Vector_CodecTest extends WP_UnitTestCase {
 	/**
 	 * Tests that unpacking rejects a byte string of the wrong length.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function test_unpack_rejects_wrong_length(): void {
 		$this->expectException( InvalidArgumentException::class );
@@ -72,7 +72,7 @@ class Vector_CodecTest extends WP_UnitTestCase {
 	/**
 	 * Tests that unpacking rejects non-positive dimensions.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function test_unpack_rejects_zero_dimensions(): void {
 		$this->expectException( InvalidArgumentException::class );
@@ -83,7 +83,7 @@ class Vector_CodecTest extends WP_UnitTestCase {
 	/**
 	 * Tests the norm calculation.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function test_norm(): void {
 		$this->assertEqualsWithDelta( 5.0, Vector_Codec::norm( array( 3, 4 ) ), 1.0e-9 );
@@ -93,7 +93,7 @@ class Vector_CodecTest extends WP_UnitTestCase {
 	/**
 	 * Tests that validation rejects values that are not usable vectors.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @dataProvider data_invalid_vectors
 	 *
@@ -108,7 +108,7 @@ class Vector_CodecTest extends WP_UnitTestCase {
 	/**
 	 * Provides values that are not usable vectors.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 *
 	 * @return array<string, array{0: mixed}> Test cases.
 	 */
@@ -133,7 +133,7 @@ class Vector_CodecTest extends WP_UnitTestCase {
 	/**
 	 * Tests that validation accepts integer and float components.
 	 *
-	 * @since 1.4.0
+	 * @since x.x.x
 	 */
 	public function test_validate_accepts_numeric_list(): void {
 		Vector_Codec::validate( array( 1, 2.5, -3 ) );
