@@ -511,7 +511,8 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 					$vector,
 					(int) $row['chunk_index'],
 					(string) ( $row['content_hash'] ?? '' ),
-					(int) $row['id']
+					(int) $row['id'],
+					(string) ( $row['object_subtype'] ?? '' )
 				);
 			} catch ( \InvalidArgumentException $e ) {
 				// A corrupt row should not take the whole result set down with it.

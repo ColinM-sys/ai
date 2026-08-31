@@ -88,7 +88,7 @@ class Embedding_SchemaTest extends WP_UnitTestCase {
 		$columns = $wpdb->get_col( "SHOW COLUMNS FROM {$table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		$this->assertSame(
-			array( 'id', 'object_type', 'object_id', 'chunk_index', 'provider', 'model', 'dimensions', 'embedding', 'embedding_norm', 'content_hash', 'created_at', 'updated_at' ),
+			array( 'id', 'object_type', 'object_id', 'chunk_index', 'provider', 'model', 'object_subtype', 'dimensions', 'embedding', 'embedding_norm', 'embedding_coarse', 'content_hash', 'created_at', 'updated_at' ),
 			$columns
 		);
 
