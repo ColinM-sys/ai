@@ -129,7 +129,8 @@ class Embedding_Schema {
 	 * re-embedding an object replaces its vector rather than accumulating a second row.
 	 *
 	 * `embedding` holds `dimensions * 4` bytes of little-endian float32 values. `embedding_coarse`
-	 * is reserved for a quantized code to support two-phase similarity search.
+	 * holds a binary quantization code, one bit per component, for the first pass of a two-phase
+	 * similarity search.
 	 *
 	 * @since x.x.x
 	 */
@@ -150,7 +151,7 @@ class Embedding_Schema {
 			dimensions INT UNSIGNED NOT NULL,
 			embedding MEDIUMBLOB NOT NULL,
 			embedding_norm DOUBLE NOT NULL,
-			embedding_coarse MEDIUMBLOB NULL,
+			embedding_coarse VARBINARY(512) NULL,
 			content_hash VARCHAR(64) NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,

@@ -11,6 +11,7 @@ use WP_UnitTestCase;
 use WordPress\AI\Embeddings\Embedding_Record;
 use WordPress\AI\Embeddings\Embedding_Repository;
 use WordPress\AI\Embeddings\Embedding_Schema;
+use WordPress\AI\Embeddings\Vector_Codec;
 
 /**
  * Embedding_Repository test case.
@@ -591,6 +592,90 @@ class Embedding_RepositoryTest extends WP_UnitTestCase {
 		// And the upgrade is cached for the rest of the request rather than re-run per write.
 		$repository->save( $this->make_record( 3 ) );
 		$this->assertSame( 1, $schema->upgrade_calls );
+	}
+
+	/**
+	 * Tests that saving stores a coarse code alongside the vector.
+	 *
+	 * Populating it on write is the point: deriving it later would mean reading and rewriting every
+	 * row, so the initial backfill would be paid for twice.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_save_stores_a_coarse_code_alongside_the_vector(): void {
+		global $wpdb;
+
+		$vector = array( 0.5, -0.5, 2.0, -2.0, 0.0, -0.1, -9.0, 0.001 );
+		$saved  = $this->repository->save( $this->make_record( 1, $vector ) );
+
+		$table  = $this->schema->get_table_name();
+		$coarse = $wpdb->get_var( $wpdb->prepare( "SELECT embedding_coarse FROM {$table} WHERE id = %d", $saved->get_id() ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		$this->assertSame( bin2hex( Vector_Codec::pack_coarse( $vector ) ), bin2hex( (string) $coarse ) );
+		$this->assertSame( 1, strlen( (string) $coarse ), 'Eight components pack into a single byte.' );
+	}
+
+	/**
+	 * Tests that the stored coarse code survives the column unaltered at realistic dimensions.
+	 *
+	 * A `VARBINARY` column silently truncates an over-long value under a non-strict SQL mode, and a
+	 * truncated code scores as a valid but wrong distance, so the round trip has to be exact.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_coarse_code_round_trips_at_realistic_dimensions(): void {
+		global $wpdb;
+
+		$vector = array();
+		for ( $i = 0; $i < 3072; $i++ ) {
+			$vector[] = sin( $i ) / 10;
+		}
+
+		$saved = $this->repository->save( $this->make_record( 1, $vector, 'gemini-embedding-001', 0, '', 'post', 'google' ) );
+
+		$table  = $this->schema->get_table_name();
+		$coarse = (string) $wpdb->get_var( $wpdb->prepare( "SELECT embedding_coarse FROM {$table} WHERE id = %d", $saved->get_id() ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		$this->assertSame( 384, strlen( $coarse ), '3072 components pack into 384 bytes.' );
+		$this->assertSame( bin2hex( Vector_Codec::pack_coarse( $vector ) ), bin2hex( $coarse ) );
+		$this->assertSame( 0, Vector_Codec::hamming( $coarse, Vector_Codec::pack_coarse( $vector ) ) );
+	}
+
+	/**
+	 * Tests that re-indexing refreshes the coarse code rather than leaving the old one.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_save_refreshes_the_coarse_code_on_reindex(): void {
+		global $wpdb;
+
+		$this->repository->save( $this->make_record( 1, array( 1.0, 1.0, 1.0, 1.0 ) ) );
+		$saved = $this->repository->save( $this->make_record( 1, array( -1.0, -1.0, -1.0, -1.0 ) ) );
+
+		$table  = $this->schema->get_table_name();
+		$coarse = (string) $wpdb->get_var( $wpdb->prepare( "SELECT embedding_coarse FROM {$table} WHERE id = %d", $saved->get_id() ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		$this->assertSame( bin2hex( Vector_Codec::pack_coarse( array( -1.0, -1.0, -1.0, -1.0 ) ) ), bin2hex( $coarse ) );
+	}
+
+	/**
+	 * Tests that the coarse column stays inline in the clustered index.
+	 *
+	 * This is the whole reason the column is a `VARBINARY` and not a BLOB: a first-pass scan that
+	 * reads only this column must never follow an off-page pointer.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_coarse_column_is_a_varbinary(): void {
+		global $wpdb;
+
+		$this->repository->save( $this->make_record( 1 ) );
+
+		$table  = $this->schema->get_table_name();
+		$column = $wpdb->get_row( "SHOW COLUMNS FROM {$table} LIKE 'embedding_coarse'", ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+
+		$this->assertSame( 'varbinary(512)', strtolower( (string) $column['Type'] ) );
+		$this->assertSame( 'YES', (string) $column['Null'], 'Rows written before the coarse path existed have no code.' );
 	}
 
 	/**

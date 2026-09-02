@@ -36,6 +36,11 @@ final class Vector_Codec {
 	public const MAX_MAGNITUDE = 3.4028234663852886e38;
 
 	/**
+	 * Widest binary quantization code the `embedding_coarse` column can hold, in bytes.
+	 */
+	public const MAX_COARSE_BYTES = 512;
+
+	/**
 	 * Packs a vector into a little-endian float32 byte string.
 	 *
 	 * @since x.x.x
@@ -108,21 +113,99 @@ final class Vector_Codec {
 	}
 
 	/**
-	 * Packs a vector into little-endian float32 bytes for coarse (quantized) similarity filtering.
+	 * Packs a vector into a binary quantization code, one bit per component.
 	 *
-	 * For MVP, this packs at full float32 precision. Applications can provide pre-quantized vectors
-	 * for coarse filtering, or this can be optimized to actual quantization (float16, int8) later.
+	 * Each component contributes a single bit recording its sign, most significant bit first, so a
+	 * 1536-dimension vector becomes 192 bytes rather than the 6,144 bytes of its float32 form.
 	 *
 	 * @since x.x.x
 	 *
-	 * @param list<int|float> $vector The coarse vector to pack.
-	 * @return string Packed bytes, `4 * count( $vector )` long.
+	 * @param list<int|float> $vector The vector to quantize.
+	 * @return string Packed bits, `ceil( count( $vector ) / 8 )` bytes long.
 	 *
-	 * @throws \InvalidArgumentException If the vector is empty or contains non-finite values.
+	 * @throws \InvalidArgumentException If the vector is empty, or contains values that are
+	 *                                   non-finite or outside float32 range.
 	 */
 	public static function pack_coarse( array $vector ): string {
-		// For now, pack_coarse() uses same format as pack(). Future: quantize to float16 or int8.
-		return self::pack( $vector );
+		self::validate( $vector );
+
+		$code   = '';
+		$byte   = 0;
+		$filled = 0;
+
+		foreach ( $vector as $value ) {
+			$byte = ( $byte << 1 ) | ( $value > 0 ? 1 : 0 );
+
+			if ( 8 !== ++$filled ) {
+				continue;
+			}
+
+			$code  .= chr( $byte );
+			$byte   = 0;
+			$filled = 0;
+		}
+
+		if ( $filled > 0 ) {
+			$padding = 8 - $filled;
+			$code   .= chr( $byte << $padding );
+		}
+
+		return $code;
+	}
+
+	/**
+	 * Returns the Hamming distance between two binary quantization codes.
+	 *
+	 * @since x.x.x
+	 *
+	 * @param string $a First code.
+	 * @param string $b Second code, of the same byte length as `$a`.
+	 * @return int Number of differing bits.
+	 *
+	 * @throws \InvalidArgumentException If the codes are empty or of differing lengths.
+	 */
+	public static function hamming( string $a, string $b ): int {
+		if ( '' === $a || strlen( $a ) !== strlen( $b ) ) {
+			throw new InvalidArgumentException(
+				esc_html(
+					sprintf(
+						'Binary quantization codes must be non-empty and the same length; got %d and %d bytes.',
+						strlen( $a ),
+						strlen( $b )
+					)
+				)
+			);
+		}
+
+		$table    = self::popcount_table();
+		$distance = 0;
+
+		foreach ( count_chars( $a ^ $b, 1 ) as $byte => $occurrences ) {
+			$distance += $table[ $byte ] * $occurrences;
+		}
+
+		return $distance;
+	}
+
+	/**
+	 * Returns a lazily built lookup table of set-bit counts for every byte value.
+	 *
+	 * @since x.x.x
+	 *
+	 * @return array<int, int> Map of byte value to number of set bits.
+	 */
+	private static function popcount_table(): array {
+		static $table = null;
+
+		if ( null === $table ) {
+			$table = array();
+
+			for ( $i = 0; $i < 256; $i++ ) {
+				$table[ $i ] = substr_count( decbin( $i ), '1' );
+			}
+		}
+
+		return $table;
 	}
 
 	/**
