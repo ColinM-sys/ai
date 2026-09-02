@@ -101,6 +101,82 @@ class Embedding_SchemaTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Tests the exact column sequence of the unique key.
+	 *
+	 * The key defines what "the same embedding" means, so its membership is a data-format decision
+	 * rather than an implementation detail. `object_subtype` and `dimensions` must stay out of it:
+	 * both can legitimately change between two indexing passes over one object, and including
+	 * either turns the upsert into an insert that strands the row it should have replaced.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_unique_key_identifies_object_model_and_chunk_only(): void {
+		$parts = $this->get_index_parts( 'uniq_object_model_chunk' );
+
+		$this->assertSame(
+			array( 'object_type', 'object_id', 'provider', 'model', 'chunk_index' ),
+			array_column( $parts, 'Column_name' )
+		);
+
+		$this->assertSame( '0', (string) $parts[0]['Non_unique'], 'uniq_object_model_chunk must be a unique index.' );
+	}
+
+	/**
+	 * Tests that no part of the unique key is a prefix of its column.
+	 *
+	 * A prefixed unique index enforces uniqueness on the prefix, not the value. Indexing
+	 * `model(64)` of a `VARCHAR(128)` would let two models whose IDs share their first 64
+	 * characters collide on a single row, so saving one would overwrite the other's vector while
+	 * the row kept reporting the first model's name — wrong results rather than no results.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_unique_key_indexes_full_column_values(): void {
+		foreach ( $this->get_index_parts( 'uniq_object_model_chunk' ) as $part ) {
+			$this->assertNull(
+				$part['Sub_part'],
+				sprintf( 'Column %s is indexed by prefix; the unique key must cover whole values.', (string) $part['Column_name'] )
+			);
+		}
+	}
+
+	/**
+	 * Returns one index's parts in key order.
+	 *
+	 * @since x.x.x
+	 *
+	 * @param string $key_name Index name.
+	 * @return list<array<string, mixed>> The index parts, ordered by position in the key.
+	 */
+	private function get_index_parts( string $key_name ): array {
+		global $wpdb;
+
+		$this->schema->maybe_upgrade_table();
+
+		$table = $this->schema->get_table_name();
+		$rows  = $wpdb->get_results( "SHOW INDEX FROM `{$table}`", ARRAY_A ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching,WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$parts = array_values(
+			array_filter(
+				is_array( $rows ) ? $rows : array(),
+				static function ( array $row ) use ( $key_name ): bool {
+					return $key_name === $row['Key_name'];
+				}
+			)
+		);
+
+		usort(
+			$parts,
+			static function ( array $a, array $b ): int {
+				return (int) $a['Seq_in_index'] <=> (int) $b['Seq_in_index'];
+			}
+		);
+
+		$this->assertNotEmpty( $parts, sprintf( 'Index %s does not exist.', $key_name ) );
+
+		return $parts;
+	}
+
+	/**
 	 * Tests that upgrading is a no-op once the table exists at the current version.
 	 *
 	 * @since x.x.x

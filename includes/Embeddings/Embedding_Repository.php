@@ -81,14 +81,15 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 		$now    = current_time( 'mysql', true );
 		$table  = $this->schema->get_table_name();
 
-		// An upsert keyed on the unique (object, provider, model, subtype, chunk, dimensions) index, so re-indexing an
-		// object replaces its vector in place instead of accumulating stale rows.
+		// An upsert keyed on the unique (object_type, object_id, provider, model, chunk_index) index, so
+		// re-indexing an object replaces its vector in place instead of accumulating stale rows.
 		$result = $wpdb->query(
 			$wpdb->prepare(
 				"INSERT INTO {$table}
 					(object_type, object_id, chunk_index, provider, model, object_subtype, dimensions, embedding, embedding_norm, embedding_coarse, content_hash, created_at, updated_at)
-				VALUES (%s, %d, %d, %s, %s, %s, %d, %s, %s, %s, %s, %s, %s)
+				VALUES (%s, %d, %d, %s, %s, %s, %d, %s, %s, NULL, %s, %s, %s)
 				ON DUPLICATE KEY UPDATE
+					object_subtype = VALUES(object_subtype),
 					dimensions = VALUES(dimensions),
 					embedding = VALUES(embedding),
 					embedding_norm = VALUES(embedding_norm),
@@ -105,7 +106,6 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 				$record->get_dimensions(),
 				Vector_Codec::pack( $vector ),
 				(string) Vector_Codec::norm( $vector ),
-				'',
 				$record->get_content_hash(),
 				$now,
 				$now

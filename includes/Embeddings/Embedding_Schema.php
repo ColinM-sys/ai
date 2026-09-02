@@ -124,9 +124,12 @@ class Embedding_Schema {
 	/**
 	 * Creates the embeddings table.
 	 *
-	 * One row per (object, provider, model, chunk). `embedding` holds `dimensions * 4` bytes of
-	 * little-endian float32 values; `embedding_norm` caches the vector's L2 norm so that cosine
-	 * similarity can be computed without a second pass over the bytes.
+	 * One row per `(object_type, object_id, provider, model, chunk_index)` — the unique key. Every
+	 * other column is an attribute of that row and is refreshed when it is re-indexed, so
+	 * re-embedding an object replaces its vector rather than accumulating a second row.
+	 *
+	 * `embedding` holds `dimensions * 4` bytes of little-endian float32 values. `embedding_coarse`
+	 * is reserved for a quantized code to support two-phase similarity search.
 	 *
 	 * @since x.x.x
 	 */
@@ -147,12 +150,12 @@ class Embedding_Schema {
 			dimensions INT UNSIGNED NOT NULL,
 			embedding MEDIUMBLOB NOT NULL,
 			embedding_norm DOUBLE NOT NULL,
-			embedding_coarse MEDIUMBLOB NOT NULL DEFAULT '',
+			embedding_coarse MEDIUMBLOB NULL,
 			content_hash VARCHAR(64) NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
-			UNIQUE KEY uniq_object_model_chunk (object_type(32), object_id, provider(32), model(64), object_subtype(32), chunk_index, dimensions),
-			KEY idx_provider_model (provider(32), model(64)),
+			UNIQUE KEY uniq_object_model_chunk (object_type, object_id, provider, model, chunk_index),
+			KEY idx_provider_model (provider, model),
 			KEY idx_object (object_type, object_id),
 			KEY idx_content_hash (content_hash)
 		) {$charset_collate};";

@@ -173,6 +173,107 @@ class Embedding_RepositoryTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Tests that re-indexing an object whose subtype changed replaces the row.
+	 *
+	 * An object's subtype is mutable — a post converted to a page, a term moved between
+	 * taxonomies — and the read side of the interface does not take a subtype argument. If subtype
+	 * were part of the row's identity, the second save would insert instead of replacing and
+	 * `get()` would return two vectors for one chunk while `get_content_hash()` picked between them
+	 * by index order.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_save_replaces_row_when_object_subtype_changes(): void {
+		$first  = $this->repository->save(
+			new Embedding_Record( 'post', 7, self::PROVIDER, self::MODEL, array( 0.1, 0.1 ), 0, 'old', 0, 'post' )
+		);
+		$second = $this->repository->save(
+			new Embedding_Record( 'post', 7, self::PROVIDER, self::MODEL, array( 0.9, 0.9 ), 0, 'new', 0, 'page' )
+		);
+
+		$this->assertSame( $first->get_id(), $second->get_id() );
+
+		$records = $this->repository->get( 'post', 7, self::PROVIDER, self::MODEL );
+
+		$this->assertCount( 1, $records );
+		$this->assertSame( 'page', $records[0]->get_object_subtype(), 'The stored subtype should follow the object.' );
+		$this->assertSame( 'new', $this->repository->get_content_hash( 'post', 7, self::PROVIDER, self::MODEL ) );
+	}
+
+	/**
+	 * Tests that a record saved without a subtype and then with one stays a single row.
+	 *
+	 * The documented usage example omits the subtype argument, so the same object reaching the
+	 * repository from a subtype-aware path and a subtype-blind one is the likeliest way to end up
+	 * with duplicates.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_save_replaces_row_when_subtype_is_added_later(): void {
+		$this->repository->save( $this->make_record( 8, array( 0.2, 0.2 ) ) );
+		$this->repository->save(
+			new Embedding_Record( 'post', 8, self::PROVIDER, self::MODEL, array( 0.4, 0.4 ), 0, '', 0, 'post' )
+		);
+
+		$records = $this->repository->get( 'post', 8, self::PROVIDER, self::MODEL );
+
+		$this->assertCount( 1, $records );
+		$this->assertSame( 'post', $records[0]->get_object_subtype() );
+		$this->assertSame( 1, $this->repository->count_objects( 'post', self::PROVIDER, self::MODEL ) );
+	}
+
+	/**
+	 * Tests that re-indexing the same model at a different dimension count replaces the row.
+	 *
+	 * `generate_embeddings()` accepts a dimensions argument, so one model can legitimately produce
+	 * vectors of two lengths on the same site. The newer vector has to win outright: a mixture
+	 * would hand a similarity pass two vectors of different lengths for a single chunk.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_save_replaces_row_when_dimensions_change(): void {
+		$this->repository->save( $this->make_record( 9, array( 0.1, 0.2, 0.3 ) ) );
+		$this->repository->save( $this->make_record( 9, array( 0.4, 0.5 ) ) );
+
+		$records = $this->repository->get( 'post', 9, self::PROVIDER, self::MODEL );
+
+		$this->assertCount( 1, $records );
+		$this->assertSame( 2, $records[0]->get_dimensions() );
+		$this->assertEqualsWithDelta( array( 0.4, 0.5 ), $records[0]->get_vector(), 1.0e-6 );
+	}
+
+	/**
+	 * Tests that models whose IDs share a long prefix are stored as separate vectors.
+	 *
+	 * Registry-qualified model IDs routinely run past 64 characters and differ only in a trailing
+	 * quantization tag. If the unique key indexed a prefix of `model`, these two would collide on
+	 * one row: the second save would overwrite the first's vector via `ON DUPLICATE KEY UPDATE`
+	 * while the row kept reporting the first model's name, so reading back the first model would
+	 * silently return the second model's vector.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_models_sharing_a_long_id_prefix_are_kept_apart(): void {
+		$model_a = 'hf.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2:Q4_K_M';
+		$model_b = 'hf.co/sentence-transformers/paraphrase-multilingual-mpnet-base-v2:Q8_0';
+
+		$this->assertSame( substr( $model_a, 0, 64 ), substr( $model_b, 0, 64 ), 'The fixtures must share a 64-character prefix.' );
+
+		$this->repository->save( $this->make_record( 1, array( 0.1, 0.1 ), $model_a, 0, 'hash-a' ) );
+		$this->repository->save( $this->make_record( 1, array( 0.9, 0.9 ), $model_b, 0, 'hash-b' ) );
+
+		$records_a = $this->repository->get( 'post', 1, self::PROVIDER, $model_a );
+		$records_b = $this->repository->get( 'post', 1, self::PROVIDER, $model_b );
+
+		$this->assertCount( 1, $records_a );
+		$this->assertCount( 1, $records_b );
+		$this->assertSame( $model_a, $records_a[0]->get_model() );
+		$this->assertSame( $model_b, $records_b[0]->get_model() );
+		$this->assertEqualsWithDelta( array( 0.1, 0.1 ), $records_a[0]->get_vector(), 1.0e-6 );
+		$this->assertEqualsWithDelta( array( 0.9, 0.9 ), $records_b[0]->get_vector(), 1.0e-6 );
+	}
+
+	/**
 	 * Tests that vectors from different models for the same object are kept apart.
 	 *
 	 * @since x.x.x
