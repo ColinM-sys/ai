@@ -19,7 +19,8 @@ defined( 'ABSPATH' ) || exit;
  * implementation backed by a native vector index can add search on top.
  *
  * Every operation is scoped to a provider and model, because vectors from different models are not
- * comparable and must never be mixed.
+ * comparable and must never be mixed. Also worth noting that vectors from the same model but with
+ * different dimension counts are not comparable.
  *
  * @since x.x.x
  */
