@@ -444,6 +444,139 @@ class Embedding_RepositoryTest extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Tests that save_many() rejects a batch containing a non-record without writing anything.
+	 *
+	 * Silently skipping bad entries returned a list shorter than the input with no signal, so a
+	 * caller pairing `$records[$i]` with `$saved[$i]` read back the wrong row IDs.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_save_many_rejects_a_batch_containing_a_non_record(): void {
+		$records = array(
+			$this->make_record( 1 ),
+			'not a record',
+			$this->make_record( 2 ),
+		);
+
+		try {
+			$this->repository->save_many( $records );
+			$this->fail( 'Expected an InvalidArgumentException for the invalid entry.' );
+		} catch ( \InvalidArgumentException $e ) {
+			$this->assertStringContainsString( 'index 1', $e->getMessage() );
+		}
+
+		// The batch is validated before anything is written, so the valid entries must not persist.
+		$this->assertSame( array(), $this->repository->get( 'post', 1, self::PROVIDER, self::MODEL ) );
+		$this->assertSame( array(), $this->repository->get( 'post', 2, self::PROVIDER, self::MODEL ) );
+	}
+
+	/**
+	 * Tests that save_many() returns one record per input, aligned by position.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_save_many_returns_a_positionally_aligned_list(): void {
+		$records = array(
+			$this->make_record( 11 ),
+			$this->make_record( 12 ),
+			$this->make_record( 13 ),
+		);
+
+		$saved = $this->repository->save_many( $records );
+
+		$this->assertCount( 3, $saved );
+		$this->assertSame(
+			array( 11, 12, 13 ),
+			array_map( static fn( Embedding_Record $r ): int => $r->get_object_id(), $saved )
+		);
+	}
+
+	/**
+	 * Tests that iterate() raises rather than reporting a clean finish when a batch fails.
+	 *
+	 * A failed query cannot be told apart from an exhausted result set by return value, so the
+	 * scan used to end early and complete normally — a caller rebuilding an index over the whole
+	 * corpus would believe it had seen every vector.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_iterate_throws_when_a_batch_cannot_be_read(): void {
+		global $wpdb;
+
+		$this->repository->save( $this->make_record( 1 ) );
+		$this->repository->save( $this->make_record( 2 ) );
+
+		$suppress = $wpdb->suppress_errors( true );
+		$thrown   = null;
+		$seen     = 0;
+
+		try {
+			// Dropping the table mid-scan makes the next batch query fail, which is the shape of the
+			// real hazard: a deadlock, lock-wait timeout or dropped connection part-way through.
+			foreach ( $this->repository->iterate( self::PROVIDER, self::MODEL, null, 1 ) as $record ) {
+				++$seen;
+
+				if ( 1 !== $seen ) {
+					continue;
+				}
+
+				$this->schema->drop_table();
+			}
+		} catch ( \RuntimeException $e ) {
+			$thrown = $e;
+		} finally {
+			// Leave the table and the error state as the next test expects to find them.
+			$wpdb->suppress_errors( $suppress );
+			$wpdb->last_error = '';
+			$this->schema->maybe_upgrade_table();
+		}
+
+		$this->assertInstanceOf(
+			\RuntimeException::class,
+			$thrown,
+			'iterate() must not complete normally when a batch cannot be read.'
+		);
+		$this->assertStringContainsString( 'Failed to read embedding records while iterating', $thrown->getMessage() );
+		$this->assertSame( 1, $seen, 'Only the records read before the failure should have been yielded.' );
+	}
+
+	/**
+	 * Tests that a read does not suppress the schema upgrade a later write depends on.
+	 *
+	 * The table has to already exist for this to bite: `table_available()` used to set the very
+	 * flag `ensure_table()` checks, so once a read had confirmed the table was there, the write
+	 * that followed skipped `maybe_upgrade_table()` entirely. On a request that reads before it
+	 * writes — `get_content_hash()` then `save()`, the natural order for a sync pass — a pending
+	 * schema migration would never run.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_a_read_before_a_write_still_runs_the_schema_upgrade(): void {
+		// Arrange: the table already exists, as it would on any request after the first.
+		$this->repository->save( $this->make_record( 1, array( 0.1, 0.2, 0.3 ), self::MODEL, 0, 'hash-1' ) );
+		$this->assertTrue( $this->schema->table_exists() );
+
+		$schema     = new Recording_Embedding_Schema();
+		$repository = new Embedding_Repository( $schema );
+
+		// A read finds the existing table.
+		$this->assertSame( 'hash-1', $repository->get_content_hash( 'post', 1, self::PROVIDER, self::MODEL ) );
+
+		// The write that follows must still consult the schema.
+		$repository->save( $this->make_record( 2 ) );
+
+		$this->assertSame(
+			1,
+			$schema->upgrade_calls,
+			'A preceding read must not stop the write from running the schema upgrade.'
+		);
+
+		// And the upgrade is cached for the rest of the request rather than re-run per write.
+		$repository->save( $this->make_record( 3 ) );
+		$this->assertSame( 1, $schema->upgrade_calls );
+	}
+
+	/**
 	 * Tests that a large, realistic vector round-trips.
 	 *
 	 * @since x.x.x
@@ -461,5 +594,31 @@ class Embedding_RepositoryTest extends WP_UnitTestCase {
 		$this->assertCount( 1, $records );
 		$this->assertSame( 3072, $records[0]->get_dimensions() );
 		$this->assertEqualsWithDelta( $vector, $records[0]->get_vector(), 1.0e-6 );
+	}
+}
+
+/**
+ * Schema that counts how many times an upgrade was requested.
+ *
+ * @since x.x.x
+ */
+class Recording_Embedding_Schema extends Embedding_Schema {
+
+	/**
+	 * Number of times maybe_upgrade_table() was called.
+	 *
+	 * @var int
+	 */
+	public int $upgrade_calls = 0;
+
+	/**
+	 * {@inheritDoc}
+	 *
+	 * @since x.x.x
+	 */
+	public function maybe_upgrade_table(): void {
+		++$this->upgrade_calls;
+
+		parent::maybe_upgrade_table();
 	}
 }

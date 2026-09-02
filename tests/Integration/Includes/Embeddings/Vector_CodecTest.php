@@ -140,4 +140,67 @@ class Vector_CodecTest extends WP_UnitTestCase {
 
 		$this->assertTrue( true );
 	}
+
+	/**
+	 * Tests that values beyond float32 range are rejected rather than packed to INF.
+	 *
+	 * These are finite as PHP float64 values, so an `is_finite()` check passes them, but they
+	 * round to `INF` on the way into four bytes. The write used to report success and the row was
+	 * then unreadable on every subsequent read.
+	 *
+	 * @since x.x.x
+	 *
+	 * @dataProvider data_out_of_float32_range
+	 *
+	 * @param int|float $value The offending component.
+	 */
+	public function test_validate_rejects_values_outside_float32_range( $value ): void {
+		$this->assertTrue( is_finite( (float) $value ), 'The fixture must be finite as a float64.' );
+
+		$this->expectException( \InvalidArgumentException::class );
+		$this->expectExceptionMessage( 'outside the range representable as float32' );
+
+		Vector_Codec::validate( array( 0.1, $value ) );
+	}
+
+	/**
+	 * Data provider for out-of-range components.
+	 *
+	 * @since x.x.x
+	 *
+	 * @return array<string, array{int|float}> Test cases.
+	 */
+	public function data_out_of_float32_range(): array {
+		return array(
+			'just above float32 max' => array( 3.5e38 ),
+			'just below float32 min' => array( -3.5e38 ),
+			'far above'              => array( 1.0e300 ),
+			'far below'              => array( -1.0e300 ),
+		);
+	}
+
+	/**
+	 * Tests that the float32 boundary itself is still accepted and round-trips.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_float32_boundary_is_accepted_and_round_trips(): void {
+		$vector = array( Vector_Codec::MAX_MAGNITUDE, -Vector_Codec::MAX_MAGNITUDE );
+
+		$unpacked = Vector_Codec::unpack( Vector_Codec::pack( $vector ), 2 );
+
+		$this->assertTrue( is_finite( $unpacked[0] ), 'The boundary value must not pack to INF.' );
+		$this->assertTrue( is_finite( $unpacked[1] ), 'The boundary value must not pack to INF.' );
+	}
+
+	/**
+	 * Tests that a rejected vector never reaches the packed representation.
+	 *
+	 * @since x.x.x
+	 */
+	public function test_pack_rejects_values_outside_float32_range(): void {
+		$this->expectException( \InvalidArgumentException::class );
+
+		Vector_Codec::pack( array( 1.0e300 ) );
+	}
 }

@@ -45,7 +45,14 @@ interface Embedding_Repository_Interface {
 	 * @param list<\WordPress\AI\Embeddings\Embedding_Record> $records The records to store.
 	 * @return list<\WordPress\AI\Embeddings\Embedding_Record> The stored records, carrying their row IDs.
 	 *
-	 * @throws \RuntimeException If a record could not be written.
+	 * The returned list is positionally aligned with $records, so callers may pair them by index.
+	 *
+	 * @throws \InvalidArgumentException If any entry is not an Embedding_Record. The batch is
+	 *                                   validated in full before anything is written, so a rejected
+	 *                                   batch writes nothing.
+	 * @throws \RuntimeException         If a record could not be written. Records are written one
+	 *                                   at a time and are not rolled back, so a failure part-way
+	 *                                   through leaves the earlier records stored.
 	 */
 	public function save_many( array $records ): array;
 
@@ -123,6 +130,10 @@ interface Embedding_Repository_Interface {
 	 * @param string|null $object_type Optional. Restrict to one object type. Default null.
 	 * @param int         $batch_size  Optional. Rows fetched per query. Default 200.
 	 * @return iterable<\WordPress\AI\Embeddings\Embedding_Record> The records.
+	 *
+	 * @throws \RuntimeException If a batch could not be read. Normal completion therefore means
+	 *                           every matching record was yielded, which is what lets a caller
+	 *                           rebuilding an index over the whole corpus trust the scan.
 	 */
 	public function iterate( string $provider, string $model, ?string $object_type = null, int $batch_size = 200 ): iterable;
 

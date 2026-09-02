@@ -31,6 +31,11 @@ final class Vector_Codec {
 	public const BYTES_PER_COMPONENT = 4;
 
 	/**
+	 * Largest magnitude representable as a float32.
+	 */
+	public const MAX_MAGNITUDE = 3.4028234663852886e38;
+
+	/**
 	 * Packs a vector into a little-endian float32 byte string.
 	 *
 	 * @since x.x.x
@@ -38,7 +43,8 @@ final class Vector_Codec {
 	 * @param list<int|float> $vector The vector to pack.
 	 * @return string Packed bytes, `4 * count( $vector )` long.
 	 *
-	 * @throws \InvalidArgumentException If the vector is empty or contains non-finite values.
+	 * @throws \InvalidArgumentException If the vector is empty, or contains values that are
+	 *                                   non-finite or outside float32 range.
 	 */
 	public static function pack( array $vector ): string {
 		self::validate( $vector );
@@ -127,7 +133,8 @@ final class Vector_Codec {
 	 * @param mixed $vector The candidate vector.
 	 * @return void
 	 *
-	 * @throws \InvalidArgumentException If the value is not a usable vector.
+	 * @throws \InvalidArgumentException If the value is not a non-empty list of numbers, or if any
+	 *                                   component is non-finite or outside float32 range.
 	 */
 	public static function validate( $vector ): void {
 		if ( ! is_array( $vector ) || array() === $vector || array_keys( $vector ) !== range( 0, count( $vector ) - 1 ) ) {
@@ -144,6 +151,17 @@ final class Vector_Codec {
 			if ( is_float( $value ) && ! is_finite( $value ) ) {
 				throw new InvalidArgumentException(
 					esc_html( sprintf( 'Embedding vector component %d is not finite.', $index ) )
+				);
+			}
+
+			if ( $value > self::MAX_MAGNITUDE || $value < -self::MAX_MAGNITUDE ) {
+				throw new InvalidArgumentException(
+					esc_html(
+						sprintf(
+							'Embedding vector component %d is outside the range representable as float32.',
+							$index
+						)
+					)
 				);
 			}
 		}

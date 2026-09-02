@@ -9,6 +9,7 @@ declare( strict_types=1 );
 
 namespace WordPress\AI\Embeddings;
 
+use InvalidArgumentException;
 use RuntimeException;
 
 defined( 'ABSPATH' ) || exit;
@@ -39,11 +40,25 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	private Embedding_Schema $schema;
 
 	/**
-	 * Whether the table has been verified to exist during this request.
+	 * Blog IDs whose table has been seen to exist during this request.
 	 *
-	 * @var bool
+	 * Keyed by blog ID because `Embedding_Schema::get_table_name()` reads `$wpdb->prefix`, so one
+	 * repository instance reused across `switch_to_blog()` addresses a different table on each
+	 * site.
+	 *
+	 * @var array<int, bool>
 	 */
-	private bool $table_ready = false;
+	private array $table_exists_for = array();
+
+	/**
+	 * Blog IDs whose schema has been brought up to date during this request.
+	 *
+	 * Deliberately separate from {@see self::$table_exists_for}: "the table exists" is not "the
+	 * schema is current".
+	 *
+	 * @var array<int, bool>
+	 */
+	private array $schema_current_for = array();
 
 	/**
 	 * Constructor.
@@ -132,19 +147,31 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	 * {@inheritDoc}
 	 *
 	 * @since x.x.x
+	 *
+	 * @throws \InvalidArgumentException If any entry is not an Embedding_Record.
 	 */
 	public function save_many( array $records ): array {
 		if ( empty( $records ) ) {
 			return array();
 		}
 
+		// Require the whole batch to be valid before writing any of it.
+		foreach ( $records as $index => $record ) {
+			if ( ! $record instanceof Embedding_Record ) {
+				throw new InvalidArgumentException(
+					esc_html(
+						sprintf(
+							'Embedding record at index %s is not an Embedding_Record instance.',
+							(string) $index
+						)
+					)
+				);
+			}
+		}
+
 		$saved = array();
 
 		foreach ( $records as $record ) {
-			if ( ! $record instanceof Embedding_Record ) {
-				continue;
-			}
-
 			$saved[] = $this->save( $record );
 		}
 
@@ -302,6 +329,8 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	 * {@inheritDoc}
 	 *
 	 * @since x.x.x
+	 *
+	 * @throws \RuntimeException If a batch could not be read.
 	 */
 	public function iterate( string $provider, string $model, ?string $object_type = null, int $batch_size = 200 ): iterable {
 		global $wpdb;
@@ -342,7 +371,14 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 				);
 			}
 
-			$rows    = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+			$rows = $wpdb->get_results( $sql, ARRAY_A ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+
+			if ( '' !== (string) $wpdb->last_error ) {
+				throw new RuntimeException(
+					esc_html( 'Failed to read embedding records while iterating: ' . (string) $wpdb->last_error )
+				);
+			}
+
 			$rows    = is_array( $rows ) ? $rows : array();
 			$fetched = count( $rows );
 
@@ -435,7 +471,9 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	 * @throws \RuntimeException If the table could not be created.
 	 */
 	private function ensure_table(): void {
-		if ( $this->table_ready ) {
+		$blog_id = get_current_blog_id();
+
+		if ( isset( $this->schema_current_for[ $blog_id ] ) ) {
 			return;
 		}
 
@@ -445,7 +483,8 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 			throw new RuntimeException( 'The embeddings table could not be created.' );
 		}
 
-		$this->table_ready = true;
+		$this->schema_current_for[ $blog_id ] = true;
+		$this->table_exists_for[ $blog_id ]   = true;
 	}
 
 	/**
@@ -459,13 +498,19 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	 * @return bool True when the table exists.
 	 */
 	private function table_available(): bool {
-		if ( $this->table_ready ) {
+		$blog_id = get_current_blog_id();
+
+		if ( isset( $this->table_exists_for[ $blog_id ] ) ) {
 			return true;
 		}
 
-		$this->table_ready = $this->schema->table_exists();
+		if ( ! $this->schema->table_exists() ) {
+			return false;
+		}
 
-		return $this->table_ready;
+		$this->table_exists_for[ $blog_id ] = true;
+
+		return true;
 	}
 
 	/**
