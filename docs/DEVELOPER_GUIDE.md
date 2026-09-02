@@ -249,7 +249,7 @@ The plugin also includes the following action hooks:
 
 ### Editorial Guidelines
 
-When the `wp_guideline` post type is available, AI abilities can opt into site-wide editorial guidance for tone, copy, image, and other prompt constraints. The plugin consumes those guidelines; it does not manage the guidelines UI.
+When the `wp_knowledge` post type is available, AI abilities can opt into site-wide editorial guidance for tone, copy, image, and other prompt constraints. Each guideline lives in its own published `wp_knowledge` row (for example `guideline-site` or `guideline-copy`) with the text in the post content. The plugin consumes those guidelines; it does not manage the guidelines UI.
 
 Abilities opt in by returning the categories they support:
 
@@ -436,6 +436,7 @@ For more detailed information on plugin architecture, creating experiments, and 
 - [Release Instructions](RELEASE_INSTRUCTIONS.md) - Checklist steps for releasing versions of the plugin
 - [WordPress Plugin Handbook](https://developer.wordpress.org/plugins/)
 - [Feature and Experiment Lifecycle](FEATURE_EXPERIMENT_LIFECYCLE.md) - Defines how new Experiments land in the plugin and how they could graduate towards WordPress core
+- [Featured Connector Plugins](/docs/FEATURED_CONNECTORS.md) - Connector authors may  request consideration as a featured Connector.
 - [WordPress AI Team](https://make.wordpress.org/ai/)
 
 ### Getting Help
