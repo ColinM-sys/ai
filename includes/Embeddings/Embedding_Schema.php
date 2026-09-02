@@ -17,7 +17,7 @@ defined( 'ABSPATH' ) || exit;
  * The table is portable: it uses only column types available on every MySQL and MariaDB version
  * WordPress supports, with vectors stored as packed float32 bytes (see {@see Vector_Codec}).
  *
- * @since n.e.x.t
+ * @since x.x.x
  */
 class Embedding_Schema {
 	// Schema management necessarily uses direct queries against the dedicated embeddings table.
@@ -43,26 +43,28 @@ class Embedding_Schema {
 	 *
 	 * Cheap to call repeatedly: once the stored version matches, only an option read happens.
 	 *
-	 * @since n.e.x.t
+	 * @since x.x.x
 	 */
 	public function maybe_upgrade_table(): void {
-		if ( self::SCHEMA_VERSION === get_option( self::SCHEMA_VERSION_OPTION, '' ) && $this->table_exists() ) {
+		$current_version = get_option( self::SCHEMA_VERSION_OPTION, '' );
+
+		if ( self::SCHEMA_VERSION === $current_version && $this->table_exists() ) {
 			return;
 		}
-
-		$this->maybe_create_table();
 
 		if ( ! $this->table_exists() ) {
-			return;
+			$this->create_table();
 		}
 
-		update_option( self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false );
+		if ( $this->table_exists() ) {
+			update_option( self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false );
+		}
 	}
 
 	/**
 	 * Creates the database table if needed.
 	 *
-	 * @since n.e.x.t
+	 * @since x.x.x
 	 */
 	public function maybe_create_table(): void {
 		if ( $this->table_exists() ) {
@@ -75,7 +77,7 @@ class Embedding_Schema {
 	/**
 	 * Returns the full table name with prefix.
 	 *
-	 * @since n.e.x.t
+	 * @since x.x.x
 	 *
 	 * @return string The prefixed table name.
 	 */
@@ -88,7 +90,7 @@ class Embedding_Schema {
 	/**
 	 * Checks whether the embeddings table exists.
 	 *
-	 * @since n.e.x.t
+	 * @since x.x.x
 	 *
 	 * @return bool True when the table exists.
 	 */
@@ -109,7 +111,7 @@ class Embedding_Schema {
 	/**
 	 * Drops the table and forgets the schema version.
 	 *
-	 * @since n.e.x.t
+	 * @since x.x.x
 	 */
 	public function drop_table(): void {
 		global $wpdb;
@@ -127,7 +129,7 @@ class Embedding_Schema {
 	 * little-endian float32 values; `embedding_norm` caches the vector's L2 norm so that cosine
 	 * similarity can be computed without a second pass over the bytes.
 	 *
-	 * @since n.e.x.t
+	 * @since x.x.x
 	 */
 	private function create_table(): void {
 		global $wpdb;
@@ -142,14 +144,16 @@ class Embedding_Schema {
 			chunk_index INT UNSIGNED NOT NULL DEFAULT 0,
 			provider VARCHAR(64) NOT NULL,
 			model VARCHAR(128) NOT NULL,
+			object_subtype VARCHAR(32) NOT NULL DEFAULT '',
 			dimensions INT UNSIGNED NOT NULL,
 			embedding MEDIUMBLOB NOT NULL,
 			embedding_norm DOUBLE NOT NULL,
+			embedding_coarse MEDIUMBLOB NOT NULL DEFAULT '',
 			content_hash VARCHAR(64) NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL,
 			updated_at DATETIME NOT NULL,
-			UNIQUE KEY uniq_object_model_chunk (object_type, object_id, provider, model, chunk_index),
-			KEY idx_provider_model (provider, model),
+			UNIQUE KEY uniq_object_model_chunk (object_type(32), object_id, provider(32), model(64), object_subtype(32), chunk_index, dimensions),
+			KEY idx_provider_model (provider(32), model(64)),
 			KEY idx_object (object_type, object_id),
 			KEY idx_content_hash (content_hash)
 		) {$charset_collate};";
