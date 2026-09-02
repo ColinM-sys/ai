@@ -100,7 +100,7 @@ class Embedding_Schema {
 		$existing_table = $wpdb->get_var(
 			$wpdb->prepare(
 				'SHOW TABLES LIKE %s',
-				$table_name
+				$wpdb->esc_like( $table_name )
 			)
 		);
 

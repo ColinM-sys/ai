@@ -83,6 +83,8 @@ interface Embedding_Repository_Interface {
 	 * Returns the content hash stored for an object, if any.
 	 *
 	 * Lets callers decide whether an object needs re-embedding without loading its vectors.
+	 * The hash is object-level: every chunk of an object stores the same hash, covering the whole
+	 * source content.
 	 *
 	 * @since x.x.x
 	 *

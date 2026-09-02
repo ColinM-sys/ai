@@ -7,12 +7,32 @@ Vectors are stored in the `wpai_embeddings` table, one row per `(object_type, ob
 ```php
 use WordPress\AI\Embeddings\Embedding_Record;
 use WordPress\AI\Embeddings\Embedding_Repository;
+use function WordPress\AI\generate_embeddings;
 
 $repository = new Embedding_Repository();
 
-// Store (or replace) the vector for post 42 produced by a specific model.
+$result = generate_embeddings( $text, array(
+	'provider' => 'ollama',
+	'model'    => 'nomic-embed-text:latest',
+) );
+
+if ( is_wp_error( $result ) ) {
+	return $result;
+}
+
+// Take the provider and model from the result rather than from the request. They are part of the
+// row's identity, so they have to name what actually produced the vector — and when a model
+// instance is passed instead of an ID, the caller never named a provider in the first place.
 $repository->save(
-	new Embedding_Record( 'post', 42, 'ollama', 'nomic-embed-text:latest', $vector, 0, hash( 'sha256', $text ) )
+	new Embedding_Record(
+		'post',
+		42,
+		$result->getProviderMetadata()->getId(),
+		$result->getModelMetadata()->getId(),
+		$result->getEmbeddings()[0]->getValues(),
+		0,
+		hash( 'sha256', $text )
+	)
 );
 
 // Read it back — always scoped to the model that produced it.
@@ -27,7 +47,16 @@ foreach ( $repository->iterate( 'ollama', 'nomic-embed-text:latest', 'post' ) as
 	// $record->get_vector(), $record->get_object_id() …
 }
 
-// Switching models means re-indexing; drop everything the old model produced.
+// Switching models means re-indexing. Provider and model are part of every row's identity, so
+// index the new model alongside the old one and only drop the old vectors once coverage is
+// complete — the existing index keeps serving results for the whole backfill.
+foreach ( $post_ids as $post_id ) {
+	$repository->save(
+		new Embedding_Record( 'post', $post_id, 'ollama', 'mxbai-embed-large:latest', $new_vector )
+	);
+}
+
+// Cut over only after the new model covers everything.
 $repository->delete_for_model( 'ollama', 'nomic-embed-text:latest' );
 ```
 

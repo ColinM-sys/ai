@@ -35,7 +35,8 @@ class Embedding_SchemaTest extends WP_UnitTestCase {
 		parent::setUp();
 
 		$this->schema = new Embedding_Schema();
-		$this->schema->drop_table();
+
+		$this->reset_storage();
 	}
 
 	/**
@@ -44,9 +45,25 @@ class Embedding_SchemaTest extends WP_UnitTestCase {
 	 * @since x.x.x
 	 */
 	protected function tearDown(): void {
-		$this->schema->drop_table();
+		$this->reset_storage();
 
 		parent::tearDown();
+	}
+
+	/**
+	 * Removes every trace of the storage layer's own state.
+	 *
+	 * These tests need real DDL, and `CREATE TABLE` / `DROP TABLE` force an implicit commit on both
+	 * MySQL and MariaDB — which ends the transaction `WP_UnitTestCase` opened, so anything written
+	 * before the DDL is committed for real and will not roll back. Isolation therefore has to be
+	 * explicit rather than inherited: this runs before and after every test, and anything that
+	 * mutates state mid-test is responsible for restoring it.
+	 *
+	 * @since x.x.x
+	 */
+	private function reset_storage(): void {
+		$this->schema->drop_table();
+		delete_option( Embedding_Schema::SCHEMA_VERSION_OPTION );
 	}
 
 	/**

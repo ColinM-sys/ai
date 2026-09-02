@@ -137,11 +137,19 @@ final class Vector_Codec {
 	 *                                   component is non-finite or outside float32 range.
 	 */
 	public static function validate( $vector ): void {
-		if ( ! is_array( $vector ) || array() === $vector || array_keys( $vector ) !== range( 0, count( $vector ) - 1 ) ) {
+		if ( ! is_array( $vector ) || array() === $vector ) {
 			throw new InvalidArgumentException( 'Embedding vector must be a non-empty list of numbers.' );
 		}
 
+		$expected_index = 0;
+
 		foreach ( $vector as $index => $value ) {
+			if ( $index !== $expected_index ) {
+				throw new InvalidArgumentException( 'Embedding vector must be a non-empty list of numbers.' );
+			}
+
+			++$expected_index;
+
 			if ( ! is_int( $value ) && ! is_float( $value ) ) {
 				throw new InvalidArgumentException(
 					esc_html( sprintf( 'Embedding vector component %d is not a number.', $index ) )
