@@ -41,24 +41,23 @@ class Embedding_Schema {
 	/**
 	 * Ensures the embeddings table matches the current schema version.
 	 *
-	 * Cheap to call repeatedly: once the stored version matches, only an option read happens.
-	 *
 	 * @since x.x.x
 	 */
 	public function maybe_upgrade_table(): void {
-		$current_version = get_option( self::SCHEMA_VERSION_OPTION, '' );
-
-		if ( self::SCHEMA_VERSION === $current_version && $this->table_exists() ) {
+		if (
+			self::SCHEMA_VERSION === get_option( self::SCHEMA_VERSION_OPTION, '' ) &&
+			$this->table_exists()
+		) {
 			return;
 		}
 
+		$this->maybe_create_table();
+
 		if ( ! $this->table_exists() ) {
-			$this->create_table();
+			return;
 		}
 
-		if ( $this->table_exists() ) {
-			update_option( self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false );
-		}
+		update_option( self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION, false );
 	}
 
 	/**

@@ -131,9 +131,6 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 	/**
 	 * {@inheritDoc}
 	 *
-	 * Inserts or updates multiple records in a single batch INSERT...ON DUPLICATE KEY UPDATE
-	 * statement for performance on large datasets (50k+ items).
-	 *
 	 * @since x.x.x
 	 */
 	public function save_many( array $records ): array {
@@ -141,20 +138,14 @@ class Embedding_Repository implements Embedding_Repository_Interface {
 			return array();
 		}
 
-		global $wpdb;
-
-		$this->ensure_table();
-
-		$table = $this->schema->get_table_name();
-		$now   = current_time( 'mysql', true );
 		$saved = array();
 
-		// For MVP, use individual saves via save(). Batch INSERT optimization deferred.
-		// TODO: implement true batch INSERT with correct wpdb->prepare() placeholders if needed.
 		foreach ( $records as $record ) {
-			if ( $record instanceof Embedding_Record ) {
-				$saved[] = $this->save( $record );
+			if ( ! $record instanceof Embedding_Record ) {
+				continue;
 			}
+
+			$saved[] = $this->save( $record );
 		}
 
 		return $saved;
